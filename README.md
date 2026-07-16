@@ -2,7 +2,7 @@
 
 # IDM Room Sensor
 
-**Open-Hardware-Raumsensoren und Home-Assistant-Simulator für IDM AERO ALM / Navigator 2.0**
+**Open-Hardware-Raumsensoren und Home-Assistant-Simulator für IDM AERO ALM / Navigator 2.0 & 10**
 
 [![Project status](https://img.shields.io/badge/status-Rev.%20A%20Prototype-orange)](#projektstatus)
 [![KiCad](https://img.shields.io/badge/KiCad-hardware-314CB0?logo=kicad&logoColor=white)](hardware/)
