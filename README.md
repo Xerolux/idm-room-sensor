@@ -1,157 +1,157 @@
 <div align="center">
 
-# IDM Room Sensor
+# IDM Smart Climate Platform
 
-**Open-Hardware-Raumsensoren und Home-Assistant-Simulator für IDM AERO ALM / Navigator 2.0 & 10**
+**Open-source climate bridge, room sensing and condensation protection for IDM heat pumps**
 
-[![Project status](https://img.shields.io/badge/status-Rev.%20A%20Prototype-orange)](#projektstatus)
-[![KiCad](https://img.shields.io/badge/KiCad-hardware-314CB0?logo=kicad&logoColor=white)](hardware/)
-[![ESPHome](https://img.shields.io/badge/ESPHome-supported-000000?logo=esphome&logoColor=white)](firmware/)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-supported-18BCF2?logo=homeassistant&logoColor=white)](homeassistant/)
-[![Hardware license](https://img.shields.io/badge/hardware-CERN--OHL--S--2.0-blue)](LICENSE)
-[![Firmware license](https://img.shields.io/badge/firmware-MIT-green)](firmware/LICENSE)
+![Status](https://img.shields.io/badge/status-WORK%20IN%20PROGRESS-orange)
+![Hardware](https://img.shields.io/badge/hardware-UNTESTED-red)
+![ESPHome](https://img.shields.io/badge/ESPHome-prototype-blue)
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-integration-18BCF2)
+![KiCad](https://img.shields.io/badge/KiCad-9-314CB0)
 
 </div>
 
-> [!WARNING]
-> **Revision A ist ein Entwicklungsstand und nicht produktionsfreigegeben.**  
-> Schaltplan, Footprints, Routing, Schutzbeschaltung, Kennlinien und Kalibrierung müssen vor Fertigung und Anschluss geprüft werden.
+> [!CAUTION]
+> **Experimental developer edition. Not production-ready and not validated on a real IDM installation.**  
+> Do not connect unverified hardware to a heat pump. Independent condensation protection remains mandatory for cooling tests.
 
-## Projektidee
+## What this project contains
 
-Das Repository bündelt drei Ansätze für den kombinierten IDM-Raumtemperatur- und Feuchtesensor:
+The platform combines three hardware approaches and a software-first GLT bridge:
 
-| Variante | Messung | Home Assistant | IDM-Ausgabe | Einsatzzweck |
-|---|---|---:|---|---|
-| **ESP Sensor** | SHT45 + echter KTY81-210 | ✅ ESPHome | 0–10 V + KTY81-210 | Smarter echter Raumsensor |
-| **Classic Sensor** | SHT45 + echter KTY81-210 | ❌ | 0–10 V + KTY81-210 | Kleiner Ersatz ohne WLAN |
-| **Fake Sensor** | Werte aus HA | ✅ ESPHome | 0–10 V + KTY-Simulation | Kritischsten Raum an IDM melden |
+| Component | Purpose | Status |
+|---|---|---|
+| ESP Room Sensor | Local SHT45 sensing, ESPHome, 0–10 V humidity and real KTY81-210 | Design prototype |
+| Classic Sensor | Compact local sensor without Wi-Fi | Design prototype |
+| Fake Sensor / Bridge | Receives HA/KNX/MQTT values and emulates the original IDM interface | Design prototype |
+| Climate Engine | Selects the most critical room by dew-point margin | Functional HA example |
+| `set_external_climate` patch | Native service proposal for `idm-heatpump-hass` | Ready for review, untested |
+| Pipe Dew-Point Guard | Independent pipe-temperature/condensation safety concept | Documentation only |
 
-## Hardwarevarianten
+## Confirmed original sensor information
 
-### ESP Sensor
+The available LCN-FTW04 documentation identifies a combined room humidity/temperature sensor, a 0–10 V humidity output, KTY temperature element and 14–30 V DC supply. Only one room humidity sensor is intended for the Navigator; individual room temperatures may come from room units.
 
-Der ESP32-C3 wird direkt aus den 24 V der IDM versorgt. Ein SHT45 misst Temperatur und Feuchte, Home Assistant erhält die Messwerte per ESPHome. Die IDM bekommt den Feuchtewert als 0–10-V-Signal; die Temperatur wird durch einen echten KTY81-210 bereitgestellt.
+Current project terminal mapping must be verified against the exact IDM wiring diagram before connection:
 
-![ESP Sensor PCB](docs/images/esp-sensor-pcb.svg)
+| Function | Project signal |
+|---|---|
+| Supply | 14–30 V DC |
+| Humidity | 0–10 V, working assumption 0–100 % RH |
+| Temperature | KTY81-210 equivalent |
+| Ground | Common reference |
 
-[Hardware öffnen](hardware/esp-sensor/) · [ESPHome-Konfiguration](firmware/esp-sensor-esphome.yaml)
-
-### Classic Sensor
-
-Kompakte Stand-alone-Version ohne WLAN. Ein kleiner Mikrocontroller liest den SHT45 und erzeugt das analoge Feuchtesignal. Die Temperatur wird wieder über einen echten KTY81-210 gemeldet.
-
-![Classic Sensor PCB](docs/images/classic-sensor-pcb.svg)
-
-[Hardware öffnen](hardware/classic-sensor/)
-
-### Fake Sensor
-
-Diese Version empfängt Temperatur und Feuchte aus Home Assistant und verhält sich elektrisch wie der vorgesehene IDM-Sensor. Dadurch kann die Anlage beispielsweise den **höchsten Feuchtewert** oder den **kritischsten Taupunkt** aus mehreren Räumen berücksichtigen.
-
-![Fake Sensor PCB](docs/images/fake-sensor-pcb.svg)
-
-[Hardware öffnen](hardware/fake-sensor/) · [HA-Automation](homeassistant/fake-sensor-automation.yaml)
-
-## Vorgesehener IDM-Anschluss
-
-| IDM-Klemme | Funktion |
-|---:|---|
-| **42** | +24 V Versorgung |
-| **43** | GND |
-| **40** | relative Feuchte, vorläufig 0–10 V |
-| **72** | Temperatur / KTY81-210 |
-| **73** | Temperatur-Rückleiter |
-
-Aktuelle Arbeitsannahme:
+## Preferred architecture
 
 ```text
-0 V  =   0 % relative Feuchte
-5 V  =  50 % relative Feuchte
-10 V = 100 % relative Feuchte
+KNX / ESPHome / Zigbee / MQTT room sensors
+                    │
+                    ▼
+        Home Assistant Climate Engine
+        - dew point per room
+        - minimum dew-point margin
+        - stale sensor detection
+        - configurable fallback
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+ GLT / Modbus registers   Analog fallback bridge
+ 1650…1663 temperature    0–10 V humidity
+ 1692 humidity            KTY emulation
+          │                   │
+          └─────────┬─────────┘
+                    ▼
+               IDM Navigator
+
+Independent pipe dew-point switch / cooling inhibit
 ```
 
-Diese Kennlinie muss vor dem produktiven Einsatz am Originalsensor oder direkt an der IDM-Regelung bestätigt werden.
+## Project checklist
 
-## Versorgung
+### Documentation and repository
+- [x] Professional README
+- [x] GitHub Pages / Docsify structure
+- [x] Wiki source pages
+- [x] Issue and pull-request templates
+- [x] Security, contributing and code-of-conduct files
+- [x] Community test forms
+- [x] Architecture and safety documentation
+
+### Home Assistant and IDM integration
+- [x] Multi-room dew-point climate-engine package
+- [x] Example automation for GLT register writes
+- [x] Proposed `set_external_climate` implementation patch
+- [x] Service schema and documentation draft
+- [ ] Review against current `idm-heatpump-api` public interfaces
+- [ ] Unit tests executed in upstream repository CI
+- [ ] Real-device Modbus verification
+- [ ] Confirm that the selected IDM configuration uses GLT values for cooling control
+
+### ESPHome and firmware
+- [x] ESPHome bridge configuration
+- [x] Home Assistant-controlled temperature/humidity inputs
+- [x] Stale-data timeout and conservative fallback concept
+- [x] Dew-point calculation example
+- [x] MCP4725 output component source
+- [x] KTY lookup and calibration framework
+- [ ] Compile against the selected ESPHome release
+- [ ] Hardware-in-the-loop test
+- [ ] OTA recovery test
+
+### Hardware
+- [x] Block-level schematics and KiCad project structure
+- [x] Board outlines and component placement concepts
+- [x] Preliminary BOM and JLCPCB templates
+- [x] Enclosure STL/OpenSCAD prototypes
+- [ ] Replace every prototype symbol/footprint with verified manufacturer footprint
+- [ ] Complete ERC/DRC with KiCad 9
+- [ ] Review switch-mode power-supply layout against regulator datasheet
+- [ ] Route and validate analog ground/current return paths
+- [ ] Manufacture prototype
+- [ ] Validate 0–10 V linearity and load drive
+- [ ] Validate KTY emulation excitation voltage/current
+- [ ] EMC, ESD, thermal and long-term tests
+
+### Real installation
+- [ ] Measure the original sensor at multiple humidity points
+- [ ] Measure IDM KTY input using a resistance decade
+- [ ] Confirm safe open-circuit and short-circuit behavior
+- [ ] Heating-only observation
+- [ ] Cooling test with independent dew-point switch
+- [ ] Multi-week logging and fault injection
+
+## Quick start for contributors
+
+1. Read [Safety](docs/#/safety) and [Validation Plan](docs/#/validation).
+2. Choose a contribution from [Help Wanted](docs/#/help-wanted).
+3. Do not mark measurements as verified without raw data and test conditions.
+4. Open an issue using the measurement or hardware-test template.
+
+## Repository layout
 
 ```text
-IDM 24 V
-   │
-   ├── Schutzbeschaltung
-   ├── 24 V → 5 V
-   └── 5 V → 3,3 V
-             ├── ESP32-C3 / ATtiny
-             ├── SHT45
-             └── DAC
+hardware/                 KiCad prototypes, BOM, CPL templates, enclosures
+firmware/                 ESPHome and custom component sources
+homeassistant/            Climate engine, automations and dashboard examples
+idm-heatpump-hass/        Upstream service patch and tests
+pages/                    GitHub Pages / Docsify site
+wiki/                     GitHub Wiki source pages
+docs/                     Technical documentation and validation plans
+manufacturing/            Shared fabrication notes and release checklist
+.github/                  Workflows, issue templates and contribution automation
 ```
 
-Die ESP- und Fake-Sensor-Version benötigen **kein separates Netzteil**.
+## Safety
 
-## Fail-safe des Fake Sensors
+This project is unaffiliated with IDM Energiesysteme. It is experimental open hardware. Incorrect humidity or temperature values can defeat condensation protection and cause water damage. Use an independent, hard-wired pipe dew-point switch during development and commissioning.
 
-Bei fehlenden Updates aus Home Assistant soll die Platine konservative Ersatzwerte ausgeben. Der aktuelle Beispielstand verwendet:
+## Community Work Packages
 
-- **80 % relative Feuchte**
-- **28 °C simulierte Temperatur**
-- Timeout: **120 Sekunden**
+- `work-packages/WP01-hardware`
+- `work-packages/WP02-firmware`
+- `work-packages/WP03-home-assistant`
+- `work-packages/WP04-documentation`
+- `work-packages/WP05-validation`
 
-Für den Kühlbetrieb sollte zusätzlich ein unabhängiger Taupunktwächter aktiv bleiben.
-
-## Repository-Struktur
-
-```text
-.
-├── hardware/
-│   ├── esp-sensor/
-│   ├── classic-sensor/
-│   └── fake-sensor/
-├── firmware/
-├── homeassistant/
-├── docs/
-│   ├── images/
-│   ├── hardware.md
-│   ├── installation.md
-│   └── safety.md
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   ├── workflows/
-│   └── pull_request_template.md
-├── CONTRIBUTING.md
-├── LICENSE
-└── README.md
-```
-
-## Projektstatus
-
-- [x] Grundkonzept und Anschlussbelegung
-- [x] Drei Hardwarevarianten angelegt
-- [x] KiCad-Projektdateien und Boardkonturen
-- [x] ESPHome- und Home-Assistant-Beispiele
-- [x] 3D-Druckgehäuse als STL und OpenSCAD
-- [ ] Originale Feuchtekennlinie verifizieren
-- [ ] KTY81-210-Eingang der IDM vermessen
-- [ ] Schaltpläne elektrisch prüfen
-- [ ] Vollständiges PCB-Routing und DRC
-- [ ] Ersten Prototyp fertigen
-- [ ] Kalibrierung und Langzeittest
-- [ ] Produktionsdaten freigeben
-
-## Dokumentation
-
-- [Hardwareübersicht](docs/hardware.md)
-- [Installation und Sensorposition](docs/installation.md)
-- [Sicherheit und Validierung](docs/safety.md)
-- [Kalibrierung des Fake Sensors](hardware/fake-sensor/CALIBRATION.md)
-
-## Mitmachen
-
-Fehlerberichte, Messwerte des Originals, Fotos der IDM-Platine und getestete Kennlinien sind besonders hilfreich. Bitte vor Änderungen [CONTRIBUTING.md](CONTRIBUTING.md) lesen.
-
-## Lizenz
-
-Hardwaredateien stehen unter **CERN-OHL-S-2.0**. Firmware und Konfigurationsbeispiele stehen unter der **MIT-Lizenz**. Details befinden sich in den jeweiligen Lizenzdateien.
-
-## Haftungsausschluss
-
-Dieses Projekt ist nicht mit IDM Energiesysteme verbunden und kein offizielles IDM-Produkt. Arbeiten an Wärmepumpen und elektrischen Anlagen dürfen nur fachgerecht erfolgen. Nutzung und Nachbau erfolgen auf eigene Verantwortung.
+See [the master checklist](PROJECT_STATUS.md).

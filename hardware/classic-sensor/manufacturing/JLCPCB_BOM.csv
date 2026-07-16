@@ -1,0 +1,6 @@
+Comment,Designator,Footprint,LCSC Part Number,Status
+24V regulator,U1,TBD,TBD,Footprint and regulator not frozen
+Controller,U2,TBD,TBD,Variant dependent
+DAC,U3,TBD,TBD,Verify selected package
+Op amp,U4,TBD,TBD,Verify supply/output swing
+Terminal,J1,TBD,TBD,Match enclosure and wiring

@@ -1,0 +1,13 @@
+blueprint:
+  name: IDM cooling inhibit
+  domain: automation
+  input:
+    margin_sensor:
+      selector:
+        entity:
+          domain: sensor
+trigger:
+  - platform: numeric_state
+    entity_id: !input margin_sensor
+    below: 2
+action: []

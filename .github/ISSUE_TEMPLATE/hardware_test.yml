@@ -1,0 +1,17 @@
+name: Hardware prototype test
+description: Report a prototype build or bench test
+title: "[Hardware Test]: "
+labels: [hardware, testing]
+body:
+  - type: dropdown
+    id: board
+    attributes: {label: Board, options: [ESP Sensor, Classic Sensor, Fake Sensor / Bridge]}
+    validations: {required: true}
+  - type: input
+    id: revision
+    attributes: {label: Revision / commit}
+    validations: {required: true}
+  - type: textarea
+    id: result
+    attributes: {label: Results, faults and measurements}
+    validations: {required: true}

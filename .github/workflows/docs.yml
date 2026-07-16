@@ -1,0 +1,13 @@
+name: Docs
+on: [push, pull_request]
+jobs:
+  links-and-yaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ibiqlik/action-yamllint@v3
+        with: {file_or_dir: ".", strict: false}
+      - name: Check required WIP warnings
+        run: |
+          grep -qi "work in progress" README.md
+          grep -qi "not production" README.md

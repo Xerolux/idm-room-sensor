@@ -1,0 +1,6 @@
+one_wire:
+  - platform: gpio
+    pin: GPIO4
+sensor:
+  - platform: dallas_temp
+    name: Pipe Temperature

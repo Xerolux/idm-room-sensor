@@ -1,0 +1,9 @@
+number:
+  - platform: template
+    id: fallback_humidity
+    name: Fallback Humidity
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true

@@ -1,0 +1,2 @@
+# Security and safety reporting
+For vulnerabilities that could cause unsafe heat-pump operation or defeat condensation protection, open a private security advisory where available. Do not publish exploit-like instructions before a safe mitigation exists.

@@ -1,0 +1,103 @@
+substitutions:
+  device_name: idm-fake-sensor
+  fallback_humidity: "80.0"
+  fallback_temperature: "28.0"
+  timeout_seconds: "120"
+
+esphome:
+  name: ${device_name}
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: apply_fallback
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+wifi:
+  ap:
+    ssid: "IDM Fake Sensor Setup"
+
+logger:
+api:
+ota:
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+
+globals:
+  - id: last_update_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+number:
+  - platform: template
+    name: "IDM Simulated Humidity"
+    id: target_humidity
+    min_value: 0
+    max_value: 100
+    step: 0.1
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+    set_action:
+      - lambda: |-
+          id(last_update_ms) = millis();
+      - script.execute: update_outputs
+
+  - platform: template
+    name: "IDM Simulated Temperature"
+    id: target_temperature
+    min_value: -20
+    max_value: 60
+    step: 0.1
+    optimistic: true
+    restore_value: true
+    initial_value: 28
+    set_action:
+      - lambda: |-
+          id(last_update_ms) = millis();
+      - script.execute: update_outputs
+
+interval:
+  - interval: 10s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return (millis() - id(last_update_ms)) > (${timeout_seconds} * 1000UL);
+          then:
+            - script.execute: apply_fallback
+
+script:
+  - id: apply_fallback
+    then:
+      - number.set:
+          id: target_humidity
+          value: ${fallback_humidity}
+      - number.set:
+          id: target_temperature
+          value: ${fallback_temperature}
+      - script.execute: update_outputs
+
+  - id: update_outputs
+    then:
+      - lambda: |-
+          /*
+           * Prototype logic:
+           * 1) RH: MCP4725 code = humidity / 100 * 4095.
+           *    Analog gain stage is calibrated so 4095 -> 10.000 V.
+           *
+           * 2) Temperature: Convert target °C to KTY81-210 equivalent resistance.
+           *    Then map resistance to AD5242 code using measured end-to-end
+           *    resistance and wiper resistance. Store calibration constants below.
+           *
+           * Replace these comments with a small custom component that writes:
+           * - MCP4725 at I2C address 0x60
+           * - AD5242 at I2C address 0x2C
+           */

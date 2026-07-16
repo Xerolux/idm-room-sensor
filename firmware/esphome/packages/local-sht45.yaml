@@ -1,0 +1,9 @@
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+sensor:
+  - platform: sht4x
+    temperature:
+      name: Local Temperature
+    humidity:
+      name: Local Humidity

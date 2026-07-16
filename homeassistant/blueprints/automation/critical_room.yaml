@@ -1,0 +1,13 @@
+blueprint:
+  name: IDM critical room selector
+  domain: automation
+  input:
+    humidity_sensors:
+      selector:
+        entity:
+          multiple: true
+          domain: sensor
+trigger:
+  - platform: time_pattern
+    minutes: "/1"
+action: []

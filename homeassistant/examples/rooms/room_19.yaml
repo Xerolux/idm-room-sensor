@@ -1,0 +1,12 @@
+template:
+  - sensor:
+      - name: "Room 19 Dew Point"
+        unit_of_measurement: "°C"
+        state: >
+          {% set t = states('sensor.room_19_temperature') | float(none) %}
+          {% set rh = states('sensor.room_19_humidity') | float(none) %}
+          {% if t is not none and rh is not none and rh > 0 %}
+            {% set a = 17.62 %}{% set b = 243.12 %}
+            {% set g = log(rh / 100) + (a * t) / (b + t) %}
+            {{ (b * g / (a - g)) | round(2) }}
+          {% else %} unavailable {% endif %}

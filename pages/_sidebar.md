@@ -1,0 +1,8 @@
+- [Home](README.md)
+- [Architecture](architecture.md)
+- [Hardware](hardware.md)
+- [Home Assistant](home-assistant.md)
+- [ESPHome](esphome.md)
+- [Cooling safety](cooling-safety.md)
+- [Validation](validation.md)
+- [Help wanted](help-wanted.md)

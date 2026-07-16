@@ -1,0 +1,23 @@
+name: KiCad file check
+
+on:
+  push:
+    paths:
+      - "hardware/**"
+      - ".github/workflows/kicad-check.yml"
+  pull_request:
+    paths:
+      - "hardware/**"
+
+jobs:
+  file-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify expected project files
+        run: |
+          set -e
+          test -f hardware/esp-sensor/IDM-RoomSensor-ESP.kicad_pcb
+          test -f hardware/classic-sensor/IDM-RoomSensor-Classic.kicad_pcb
+          test -f hardware/fake-sensor/IDM-FakeSensor-ESP.kicad_pcb
+          find hardware -type f -size 0 -print -quit | (! grep .)

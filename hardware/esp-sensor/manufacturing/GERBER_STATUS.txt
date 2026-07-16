@@ -1,0 +1,1 @@
+Gerber release intentionally withheld. The PCB is not fully routed/verified and no real prototype has passed validation gates. Generate only after KiCad ERC/DRC and peer review.

@@ -1,0 +1,19 @@
+{
+  "title": "IDM Smart Climate",
+  "type": "object",
+  "properties": {
+    "strategy": {
+      "enum": [
+        "local",
+        "remote",
+        "hybrid",
+        "critical_room"
+      ]
+    },
+    "stale_timeout_s": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 3600
+    }
+  }
+}

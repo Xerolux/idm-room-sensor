@@ -1,0 +1,22 @@
+esphome:
+  name: IDM-Smart-Climate-Platform-esp
+esp32:
+  board: esp32-c3-devkitm-1
+wifi:
+  ap:
+    ssid: "IDM Smart Climate Platform Setup"
+logger:
+api:
+ota:
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+sensor:
+  - platform: sht4x
+    temperature:
+      name: "IDM Room Temperature"
+    humidity:
+      name: "IDM Room Humidity"
+      id: rh
+    update_interval: 10s
+# MCP4725: RH 0..100% -> DAC 0..4095; OPV auf 0..10V kalibrieren.

@@ -1,0 +1,32 @@
+name: Fehlerbericht
+description: Fehler in Hardware, Firmware oder Dokumentation melden
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Variante
+      options:
+        - ESP Sensor
+        - Classic Sensor
+        - Fake Sensor
+        - Dokumentation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Fehlerbeschreibung
+      description: Was passiert und was wurde erwartet?
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Aufbau und Version
+      description: Hardware-Revision, Firmware-Version und IDM-Modell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, Messwerte oder Bilder

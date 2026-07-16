@@ -1,0 +1,24 @@
+name: Measurement report
+description: Submit original-sensor or IDM input measurements
+title: "[Measurement]: "
+labels: [measurement, help wanted]
+body:
+  - type: input
+    id: device
+    attributes: {label: IDM model / sensor model}
+    validations: {required: true}
+  - type: input
+    id: firmware
+    attributes: {label: Navigator firmware}
+  - type: input
+    id: instrument
+    attributes: {label: Test instrument and accuracy}
+    validations: {required: true}
+  - type: textarea
+    id: wiring
+    attributes: {label: Wiring and test conditions}
+    validations: {required: true}
+  - type: textarea
+    id: data
+    attributes: {label: Raw measurements}
+    validations: {required: true}

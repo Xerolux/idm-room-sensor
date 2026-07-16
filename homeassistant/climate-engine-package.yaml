@@ -1,0 +1,53 @@
+# WIP example. Replace entity IDs and test in a non-safety-critical environment.
+template:
+  - sensor:
+      - name: IDM Critical Room Dew Point Margin
+        unique_id: idm_critical_room_dew_point_margin
+        unit_of_measurement: "K"
+        state: >
+          {% set pipe = states('sensor.cooling_flow_temperature')|float(99) %}
+          {% set rooms = [
+            ('living', states('sensor.living_temperature')|float(none), states('sensor.living_humidity')|float(none)),
+            ('bedroom', states('sensor.bedroom_temperature')|float(none), states('sensor.bedroom_humidity')|float(none)),
+            ('office', states('sensor.office_temperature')|float(none), states('sensor.office_humidity')|float(none))
+          ] %}
+          {% set ns = namespace(margins=[]) %}
+          {% for name,t,rh in rooms if t is not none and rh is not none and rh > 0 %}
+            {% set a=17.62 %}{% set b=243.12 %}
+            {% set gamma=((a*t)/(b+t)) + log(rh/100) %}
+            {% set dp=(b*gamma)/(a-gamma) %}
+            {% set ns.margins=ns.margins + [pipe-dp] %}
+          {% endfor %}
+          {{ ns.margins|min if ns.margins else 'unknown' }}
+      - name: IDM Selected External Humidity
+        unique_id: idm_selected_external_humidity
+        unit_of_measurement: "%"
+        state: >
+          {{ [states('sensor.living_humidity')|float(80), states('sensor.bedroom_humidity')|float(80), states('sensor.office_humidity')|float(80)] | max }}
+      - name: IDM Selected External Room Temperature
+        unique_id: idm_selected_external_room_temperature
+        unit_of_measurement: "°C"
+        state: >
+          {% set rooms = [
+            (states('sensor.living_humidity')|float(80), states('sensor.living_temperature')|float(28)),
+            (states('sensor.bedroom_humidity')|float(80), states('sensor.bedroom_temperature')|float(28)),
+            (states('sensor.office_humidity')|float(80), states('sensor.office_temperature')|float(28))
+          ] %}
+          {{ (rooms | sort(reverse=true) | first)[1] }}
+automation:
+  - alias: IDM publish external climate
+    id: idm_publish_external_climate
+    mode: restart
+    trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    condition:
+      - condition: template
+        value_template: "{{ states('sensor.idm_selected_external_humidity') not in ['unknown','unavailable'] }}"
+    action:
+      - action: idm_heatpump.set_external_climate
+        data:
+          heating_circuit: A
+          room_temperature: "{{ states('sensor.idm_selected_external_room_temperature')|float }}"
+          humidity: "{{ states('sensor.idm_selected_external_humidity')|float }}"
+          acknowledge_risk: true

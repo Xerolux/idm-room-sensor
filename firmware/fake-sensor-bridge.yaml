@@ -1,0 +1,53 @@
+substitutions:
+  name: idm-smart-climate-bridge
+  stale_timeout: 120s
+esphome:
+  name: ${name}
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+wifi:
+  ap:
+    ssid: "IDM Climate Bridge Setup"
+captive_portal:
+logger:
+api:
+ota:
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+external_components:
+  - source:
+      type: local
+      path: components
+number:
+  - platform: template
+    name: "IDM Command Humidity"
+    id: commanded_humidity
+    min_value: 0
+    max_value: 100
+    step: 0.1
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+  - platform: template
+    name: "IDM Command Temperature"
+    id: commanded_temperature
+    min_value: -20
+    max_value: 60
+    step: 0.1
+    optimistic: true
+    restore_value: true
+    initial_value: 28
+sensor:
+  - platform: uptime
+    name: "IDM Bridge Uptime"
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          // Integration hook: write MCP4725 and calibrated KTY network.
+          // Output remains disabled until calibration constants are provided.
+          ESP_LOGW("idm_bridge", "WIP: analog outputs require hardware calibration");

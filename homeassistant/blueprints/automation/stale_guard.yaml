@@ -1,0 +1,12 @@
+blueprint:
+  name: IDM stale-data guard
+  domain: automation
+  input:
+    source_sensor:
+      selector:
+        entity:
+          domain: sensor
+trigger:
+  - platform: state
+    entity_id: !input source_sensor
+action: []

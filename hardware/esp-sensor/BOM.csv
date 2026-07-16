@@ -1,0 +1,9 @@
+Ref;Qty;Part;Suggested
+U1;1;24V→5V regulator;TPS54202/LMR16006
+U2;1;Controller;ESP32-C3-MINI-1
+U3;1;Humidity sensor;SHT45
+U4;1;DAC;MCP4725
+U5;1;Op amp;OPA197
+RTH1;1;Temperature sensor;KTY81-210
+J1;1;4-pin terminal;3.5mm
+D1;1;TVS;SMBJ30A

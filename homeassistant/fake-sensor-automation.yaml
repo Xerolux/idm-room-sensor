@@ -1,0 +1,36 @@
+alias: IDM Fake Sensor aus mehreren Räumen
+mode: restart
+trigger:
+  - platform: state
+    entity_id:
+      - sensor.wohnzimmer_luftfeuchtigkeit
+      - sensor.schlafzimmer_luftfeuchtigkeit
+      - sensor.buero_luftfeuchtigkeit
+      - sensor.wohnzimmer_temperatur
+      - sensor.schlafzimmer_temperatur
+      - sensor.buero_temperatur
+action:
+  - variables:
+      max_rh: >
+        {{ [
+          states('sensor.wohnzimmer_luftfeuchtigkeit')|float(80),
+          states('sensor.schlafzimmer_luftfeuchtigkeit')|float(80),
+          states('sensor.buero_luftfeuchtigkeit')|float(80)
+        ] | max }}
+      temp_for_worst_room: >
+        {% set rooms = [
+          (states('sensor.wohnzimmer_luftfeuchtigkeit')|float(80), states('sensor.wohnzimmer_temperatur')|float(28)),
+          (states('sensor.schlafzimmer_luftfeuchtigkeit')|float(80), states('sensor.schlafzimmer_temperatur')|float(28)),
+          (states('sensor.buero_luftfeuchtigkeit')|float(80), states('sensor.buero_temperatur')|float(28))
+        ] %}
+        {{ (rooms | sort(attribute=0, reverse=true) | first)[1] }}
+  - service: number.set_value
+    target:
+      entity_id: number.idm_simulated_humidity
+    data:
+      value: "{{ max_rh }}"
+  - service: number.set_value
+    target:
+      entity_id: number.idm_simulated_temperature
+    data:
+      value: "{{ temp_for_worst_room }}"

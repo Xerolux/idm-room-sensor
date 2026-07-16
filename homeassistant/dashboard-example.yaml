@@ -1,0 +1,17 @@
+type: vertical-stack
+cards:
+  - type: entities
+    title: IDM Climate Engine
+    entities:
+      - sensor.idm_selected_external_room_temperature
+      - sensor.idm_selected_external_humidity
+      - sensor.idm_critical_room_dew_point_margin
+  - type: gauge
+    entity: sensor.idm_critical_room_dew_point_margin
+    name: Dew-point margin
+    min: -2
+    max: 10
+    severity:
+      red: -2
+      yellow: 2
+      green: 4

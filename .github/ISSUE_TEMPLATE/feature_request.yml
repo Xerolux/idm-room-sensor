@@ -1,0 +1,17 @@
+name: Verbesserung
+description: Neue Funktion oder Hardwareverbesserung vorschlagen
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Vorschlag
+      description: Welche Verbesserung soll umgesetzt werden?
+    validations:
+      required: true
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Nutzen
+      description: Welches Problem löst die Änderung?

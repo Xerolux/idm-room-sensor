@@ -1,0 +1,8 @@
+sensor:
+  - platform: wifi_signal
+    name: WiFi RSSI
+  - platform: uptime
+    name: Uptime
+binary_sensor:
+  - platform: status
+    name: Online

@@ -1,0 +1,1 @@
+PETG/ASA, 0,20 mm, 3–4 Perimeter, ohne Support. Außenmaß ca. 45.0 × 35.0 × 20.0 mm.

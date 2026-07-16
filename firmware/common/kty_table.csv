@@ -1,0 +1,11 @@
+temperature_c,resistance_ohm,status
+-20,684,approximate
+-10,815,approximate
+0,980,approximate
+10,1180,approximate
+20,1420,approximate
+25,1560,approximate
+30,1710,approximate
+40,2020,approximate
+50,2370,approximate
+60,2760,approximate

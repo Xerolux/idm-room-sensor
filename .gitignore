@@ -1,0 +1,12 @@
+*.bak
+*.bck
+*.kicad_prl
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*-backups/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.esphome/
+secrets.yaml

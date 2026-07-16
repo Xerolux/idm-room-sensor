@@ -1,0 +1,8 @@
+esphome:
+  name: ${device_name}
+logger:
+api:
+ota:
+wifi:
+  ap:
+    ssid: "${device_name} Setup"
