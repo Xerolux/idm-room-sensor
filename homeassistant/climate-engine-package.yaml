@@ -1,53 +1,256 @@
 # WIP example. Replace entity IDs and test in a non-safety-critical environment.
+#
+# Compatibility:
+# - The raw write_register actions work with the latest released
+#   idm-heatpump-hass v0.8.2.
+# - Upstream main also contains set_external_climate. After that service is
+#   released, the two raw writes below can be replaced by one native call.
+
+input_number:
+  idm_sensor_stale_after_minutes:
+    name: IDM sensor stale after
+    icon: mdi:timer-alert-outline
+    unit_of_measurement: min
+    min: 1
+    max: 120
+    step: 1
+    initial: 15
+  idm_fallback_temperature:
+    name: IDM fallback temperature
+    icon: mdi:thermometer-alert
+    unit_of_measurement: "°C"
+    min: 15
+    max: 30
+    step: 0.5
+    initial: 28
+  idm_fallback_humidity:
+    name: IDM fallback humidity
+    icon: mdi:water-alert
+    unit_of_measurement: "%"
+    min: 1
+    max: 100
+    step: 1
+    initial: 80
+
+input_text:
+  idm_external_climate_publish_status:
+    name: IDM external climate publish status
+    icon: mdi:cloud-upload-outline
+    max: 100
+    initial: not_attempted_since_restart
+
+input_datetime:
+  idm_last_external_climate_publish:
+    name: IDM last successful external climate publish
+    icon: mdi:clock-check-outline
+    has_date: true
+    has_time: true
+
 template:
-  - sensor:
+  - triggers:
+      - trigger: state
+        entity_id:
+          - sensor.living_temperature
+          - sensor.living_humidity
+          - sensor.bedroom_temperature
+          - sensor.bedroom_humidity
+          - sensor.office_temperature
+          - sensor.office_humidity
+          - sensor.cooling_flow_temperature
+          - input_number.idm_sensor_stale_after_minutes
+          - input_number.idm_fallback_temperature
+          - input_number.idm_fallback_humidity
+          - input_text.idm_external_climate_publish_status
+          - input_datetime.idm_last_external_climate_publish
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - variables:
+          idm_selected_room: >
+            {% set stale_after = states('input_number.idm_sensor_stale_after_minutes') | float(15) * 60 %}
+            {% set fallback_temperature = states('input_number.idm_fallback_temperature') | float(28) %}
+            {% set fallback_humidity = states('input_number.idm_fallback_humidity') | float(80) %}
+            {% set rooms = [
+              {'name': 'living', 'temperature': 'sensor.living_temperature', 'humidity': 'sensor.living_humidity'},
+              {'name': 'bedroom', 'temperature': 'sensor.bedroom_temperature', 'humidity': 'sensor.bedroom_humidity'},
+              {'name': 'office', 'temperature': 'sensor.office_temperature', 'humidity': 'sensor.office_humidity'}
+            ] %}
+            {% set ns = namespace(
+              name='fallback',
+              temperature=fallback_temperature,
+              humidity=fallback_humidity,
+              dew_point=-99,
+              any_stale=false,
+              uses_fallback=true,
+              source_age_seconds=999999,
+              reason='fallback_no_valid_room'
+            ) %}
+            {% set now_timestamp = as_timestamp(now()) %}
+            {% for room in rooms %}
+              {% set temperature_state = expand(room.temperature) | first | default(none) %}
+              {% set humidity_state = expand(room.humidity) | first | default(none) %}
+              {% set fresh = false %}
+              {% set maximum_age = 999999 %}
+              {% if temperature_state is not none and humidity_state is not none
+                    and is_number(temperature_state.state)
+                    and is_number(humidity_state.state) %}
+                {% set raw_temperature = temperature_state.state | float %}
+                {% set raw_humidity = humidity_state.state | float %}
+                {% set valid_range = -40 <= raw_temperature <= 80
+                                     and 0 < raw_humidity <= 100 %}
+                {% set maximum_age = [
+                  now_timestamp - as_timestamp(temperature_state.last_reported, 0),
+                  now_timestamp - as_timestamp(humidity_state.last_reported, 0)
+                ] | max %}
+                {% set fresh = valid_range
+                               and 0 <= maximum_age <= stale_after %}
+              {% endif %}
+              {% if fresh %}
+                {% set temperature = temperature_state.state | float %}
+                {% set humidity = humidity_state.state | float %}
+              {% else %}
+                {% set temperature = fallback_temperature %}
+                {% set humidity = fallback_humidity %}
+                {% set ns.any_stale = true %}
+              {% endif %}
+              {% set humidity = clamp(humidity, 1, 100) %}
+              {% set gamma = ((17.62 * temperature) / (243.12 + temperature)) + log(humidity / 100) %}
+              {% set dew_point = (243.12 * gamma) / (17.62 - gamma) %}
+              {% if dew_point > ns.dew_point %}
+                {% set ns.name = room.name if fresh else room.name ~ ' (fallback)' %}
+                {% set ns.temperature = temperature %}
+                {% set ns.humidity = humidity %}
+                {% set ns.dew_point = dew_point %}
+                {% set ns.uses_fallback = not fresh %}
+                {% set ns.source_age_seconds = maximum_age %}
+                {% set ns.reason = 'highest_dew_point'
+                  if fresh else 'fallback_stale_or_invalid' %}
+              {% endif %}
+            {% endfor %}
+            {{ {
+              'name': ns.name,
+              'temperature': ns.temperature,
+              'humidity': ns.humidity,
+              'dew_point': ns.dew_point,
+              'any_stale': ns.any_stale,
+              'uses_fallback': ns.uses_fallback,
+              'source_age_seconds': ns.source_age_seconds,
+              'reason': ns.reason
+            } | to_json }}
+    sensor:
+      - name: IDM Critical Room
+        unique_id: idm_critical_room
+        icon: mdi:home-thermometer-outline
+        state: "{{ (idm_selected_room | from_json).name }}"
+      - name: IDM Critical Room Dew Point
+        unique_id: idm_critical_room_dew_point
+        device_class: temperature
+        state_class: measurement
+        unit_of_measurement: "°C"
+        state: "{{ (idm_selected_room | from_json).dew_point | round(2) }}"
+      - name: IDM Climate Selection Reason
+        unique_id: idm_climate_selection_reason
+        icon: mdi:information-outline
+        state: "{{ (idm_selected_room | from_json).reason }}"
+      - name: IDM Selected Source Age
+        unique_id: idm_selected_source_age
+        device_class: duration
+        state_class: measurement
+        unit_of_measurement: s
+        state: >
+          {{ (idm_selected_room | from_json).source_age_seconds
+             | round(0) | int }}
       - name: IDM Critical Room Dew Point Margin
         unique_id: idm_critical_room_dew_point_margin
+        state_class: measurement
         unit_of_measurement: "K"
         state: >
-          {% set pipe = states('sensor.cooling_flow_temperature')|float(99) %}
-          {% set rooms = [
-            ('living', states('sensor.living_temperature')|float(none), states('sensor.living_humidity')|float(none)),
-            ('bedroom', states('sensor.bedroom_temperature')|float(none), states('sensor.bedroom_humidity')|float(none)),
-            ('office', states('sensor.office_temperature')|float(none), states('sensor.office_humidity')|float(none))
-          ] %}
-          {% set ns = namespace(margins=[]) %}
-          {% for name,t,rh in rooms if t is not none and rh is not none and rh > 0 %}
-            {% set a=17.62 %}{% set b=243.12 %}
-            {% set gamma=((a*t)/(b+t)) + log(rh/100) %}
-            {% set dp=(b*gamma)/(a-gamma) %}
-            {% set ns.margins=ns.margins + [pipe-dp] %}
-          {% endfor %}
-          {{ ns.margins|min if ns.margins else 'unknown' }}
+          {% set selected = idm_selected_room | from_json %}
+          {% set pipe = states('sensor.cooling_flow_temperature') %}
+          {{ (pipe | float - selected.dew_point) | round(2)
+             if is_number(pipe) else none }}
       - name: IDM Selected External Humidity
         unique_id: idm_selected_external_humidity
+        state_class: measurement
         unit_of_measurement: "%"
-        state: >
-          {{ [states('sensor.living_humidity')|float(80), states('sensor.bedroom_humidity')|float(80), states('sensor.office_humidity')|float(80)] | max }}
+        state: "{{ clamp((idm_selected_room | from_json).humidity, 0, 100) | round(1) }}"
       - name: IDM Selected External Room Temperature
         unique_id: idm_selected_external_room_temperature
+        device_class: temperature
+        state_class: measurement
         unit_of_measurement: "°C"
+        state: "{{ clamp((idm_selected_room | from_json).temperature, 15, 30) | round(1) }}"
+      - name: IDM Last External Climate Publish Age
+        unique_id: idm_last_external_climate_publish_age
+        device_class: duration
+        state_class: measurement
+        unit_of_measurement: s
         state: >
-          {% set rooms = [
-            (states('sensor.living_humidity')|float(80), states('sensor.living_temperature')|float(28)),
-            (states('sensor.bedroom_humidity')|float(80), states('sensor.bedroom_temperature')|float(28)),
-            (states('sensor.office_humidity')|float(80), states('sensor.office_temperature')|float(28))
-          ] %}
-          {{ (rooms | sort(reverse=true) | first)[1] }}
+          {% set published =
+            as_timestamp(states('input_datetime.idm_last_external_climate_publish'), none) %}
+          {{ ([0, as_timestamp(now()) - published] | max) | round(0) | int
+             if published is not none else none }}
+    binary_sensor:
+      - name: IDM Climate Input Stale
+        unique_id: idm_climate_input_stale
+        device_class: problem
+        state: "{{ (idm_selected_room | from_json).any_stale }}"
+      - name: IDM Selected Climate Uses Fallback
+        unique_id: idm_selected_climate_uses_fallback
+        device_class: problem
+        state: "{{ (idm_selected_room | from_json).uses_fallback }}"
+      - name: IDM External Climate Publish Problem
+        unique_id: idm_external_climate_publish_problem
+        device_class: problem
+        state: >
+          {% set published =
+            as_timestamp(states('input_datetime.idm_last_external_climate_publish'), none) %}
+          {{ states('input_text.idm_external_climate_publish_status') != 'ok'
+             or published is none
+             or as_timestamp(now()) - published > 600 }}
+
 automation:
   - alias: IDM publish external climate
     id: idm_publish_external_climate
     mode: restart
-    trigger:
-      - platform: time_pattern
+    triggers:
+      - trigger: time_pattern
         minutes: "/5"
-    condition:
+      - trigger: homeassistant
+        event: start
+    conditions:
       - condition: template
-        value_template: "{{ states('sensor.idm_selected_external_humidity') not in ['unknown','unavailable'] }}"
-    action:
-      - action: idm_heatpump.set_external_climate
+        value_template: >
+          {{ is_number(states('sensor.idm_selected_external_room_temperature'))
+             and is_number(states('sensor.idm_selected_external_humidity')) }}
+    actions:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.idm_external_climate_publish_status
         data:
-          heating_circuit: A
-          room_temperature: "{{ states('sensor.idm_selected_external_room_temperature')|float }}"
-          humidity: "{{ states('sensor.idm_selected_external_humidity')|float }}"
+          value: writing
+      # Stable-release fallback. Register A is 1650; B-G use 1652...1662.
+      - action: idm_heatpump.write_register
+        data:
+          address: 1650
+          datatype: float
+          value: "{{ states('sensor.idm_selected_external_room_temperature') | float }}"
           acknowledge_risk: true
+      - action: idm_heatpump.write_register
+        data:
+          address: 1692
+          datatype: float
+          value: "{{ states('sensor.idm_selected_external_humidity') | float }}"
+          acknowledge_risk: true
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.idm_last_external_climate_publish
+        data:
+          timestamp: "{{ as_timestamp(now()) }}"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.idm_external_climate_publish_status
+        data:
+          value: ok

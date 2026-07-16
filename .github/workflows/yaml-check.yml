@@ -19,3 +19,7 @@ jobs:
         with:
           file_or_dir: .
           strict: false
+          config_data: |
+            extends: default
+            rules:
+              line-length: disable

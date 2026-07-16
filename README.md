@@ -26,7 +26,7 @@ The platform combines three hardware approaches and a software-first GLT bridge:
 | Classic Sensor | Compact local sensor without Wi-Fi | Design prototype |
 | Fake Sensor / Bridge | Receives HA/KNX/MQTT values and emulates the original IDM interface | Design prototype |
 | Climate Engine | Selects the most critical room by dew-point margin | Functional HA example |
-| `set_external_climate` patch | Native service proposal for `idm-heatpump-hass` | Ready for review, untested |
+| `set_external_climate` | Native service present on `idm-heatpump-hass` main; stable-package fallback included here | Software tested, real device untested |
 | Pipe Dew-Point Guard | Independent pipe-temperature/condensation safety concept | Documentation only |
 
 ## Confirmed original sensor information
@@ -79,12 +79,13 @@ Independent pipe dew-point switch / cooling inhibit
 - [x] Architecture and safety documentation
 
 ### Home Assistant and IDM integration
-- [x] Multi-room dew-point climate-engine package
+- [x] Multi-room climate-engine package selecting the highest dew point
 - [x] Example automation for GLT register writes
-- [x] Proposed `set_external_climate` implementation patch
-- [x] Service schema and documentation draft
-- [ ] Review against current `idm-heatpump-api` public interfaces
-- [ ] Unit tests executed in upstream repository CI
+- [x] Stale-input detection using Home Assistant `last_reported`
+- [x] `set_external_climate` reference aligned with current upstream interfaces
+- [x] Local service-contract and dew-point tests
+- [x] Current register mapping reviewed against `idm-heatpump-api` main
+- [ ] Release `set_external_climate` in a tagged `idm-heatpump-hass` version
 - [ ] Real-device Modbus verification
 - [ ] Confirm that the selected IDM configuration uses GLT values for cooling control
 
@@ -95,7 +96,9 @@ Independent pipe dew-point switch / cooling inhibit
 - [x] Dew-point calculation example
 - [x] MCP4725 output component source
 - [x] KTY lookup and calibration framework
-- [ ] Compile against the selected ESPHome release
+- [x] Compile against the selected ESPHome release
+- [x] Local authenticated web UI with confirmation-gated calibration/reset
+- [x] Native ESP-IDF target with I/O, fail-safe runtime, NVS, API and OTA
 - [ ] Hardware-in-the-loop test
 - [ ] OTA recovery test
 
@@ -124,7 +127,7 @@ Independent pipe dew-point switch / cooling inhibit
 ## Quick start for contributors
 
 1. Read [Safety](docs/#/safety) and [Validation Plan](docs/#/validation).
-2. Choose a contribution from [Help Wanted](docs/#/help-wanted).
+2. Choose the next unblocked item from the [prioritized task list](TASKS.md).
 3. Do not mark measurements as verified without raw data and test conditions.
 4. Open an issue using the measurement or hardware-test template.
 
@@ -142,6 +145,9 @@ manufacturing/            Shared fabrication notes and release checklist
 .github/                  Workflows, issue templates and contribution automation
 ```
 
+ESPHome and native ESP-IDF builds use the pinned toolchains documented in
+[firmware/BUILDING.md](firmware/BUILDING.md).
+
 ## Safety
 
 This project is unaffiliated with IDM Energiesysteme. It is experimental open hardware. Incorrect humidity or temperature values can defeat condensation protection and cause water damage. Use an independent, hard-wired pipe dew-point switch during development and commissioning.
@@ -154,4 +160,5 @@ This project is unaffiliated with IDM Energiesysteme. It is experimental open ha
 - `work-packages/WP04-documentation`
 - `work-packages/WP05-validation`
 
-See [the master checklist](PROJECT_STATUS.md).
+See the [prioritized task list](TASKS.md) and the compact
+[project-status summary](PROJECT_STATUS.md).

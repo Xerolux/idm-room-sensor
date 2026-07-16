@@ -1,12 +1,131 @@
 blueprint:
   name: IDM stale-data guard
+  description: >
+    Runs safe-state actions when a selected entity becomes unavailable,
+    non-numeric, timestamp-invalid, or older than the configured maximum age.
+    Recovery actions run once when the source becomes fresh again. The guard
+    is evaluated at Home Assistant startup and on subsequent state/age
+    transitions.
   domain: automation
+  author: IDM Smart Climate Platform
+  homeassistant:
+    min_version: "2024.10.0"
   input:
-    source_sensor:
-      selector:
-        entity:
-          domain: sensor
-trigger:
-  - platform: state
-    entity_id: !input source_sensor
-action: []
+    source:
+      name: Guarded source
+      icon: mdi:database-clock-outline
+      input:
+        source_sensor:
+          name: Source entity
+          selector:
+            entity:
+        stale_after_minutes:
+          name: Stale after
+          description: Maximum permitted age of `last_reported`.
+          default: 15
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              unit_of_measurement: min
+              mode: box
+        require_numeric:
+          name: Require a numeric value
+          description: Treat a non-numeric state as unsafe.
+          default: true
+          selector:
+            boolean:
+    output_actions:
+      name: Guard actions
+      icon: mdi:shield-check-outline
+      collapsed: true
+      input:
+        stale_actions:
+          name: Safe-state actions
+          description: >
+            Runs once when the source becomes unsafe. Available variables:
+            `source_entity_id`, `source_value`, `source_age_seconds`,
+            `guard_is_stale`, and `guard_reason`.
+          default: []
+          selector:
+            action:
+        recovery_actions:
+          name: Recovery actions
+          description: Runs once after the source is fresh and valid again.
+          default: []
+          selector:
+            action:
+
+trigger_variables:
+  source_sensor: !input source_sensor
+  stale_after_minutes: !input stale_after_minutes
+  require_numeric: !input require_numeric
+
+triggers:
+  - trigger: template
+    id: stale
+    value_template: >
+      {% set source = expand(source_sensor) | first | default(none) %}
+      {% set unavailable = source is none
+        or source.state | lower in ['unknown', 'unavailable', 'none', ''] %}
+      {% set invalid = require_numeric and source is not none
+        and not is_number(source.state) %}
+      {% set age = 999999 if source is none else
+        as_timestamp(now()) - as_timestamp(source.last_reported, 0) %}
+      {{ unavailable or invalid or age < 0
+         or age > stale_after_minutes | float(15) * 60 }}
+  - trigger: template
+    id: recovered
+    value_template: >
+      {% set source = expand(source_sensor) | first | default(none) %}
+      {% set unavailable = source is none
+        or source.state | lower in ['unknown', 'unavailable', 'none', ''] %}
+      {% set invalid = require_numeric and source is not none
+        and not is_number(source.state) %}
+      {% set age = 999999 if source is none else
+        as_timestamp(now()) - as_timestamp(source.last_reported, 0) %}
+      {{ not (unavailable or invalid or age < 0
+              or age > stale_after_minutes | float(15) * 60) }}
+  - trigger: homeassistant
+    id: startup
+    event: start
+
+actions:
+  - variables:
+      source_entity_id: !input source_sensor
+      guard_status: >
+        {% set source =
+          expand(source_entity_id) | first | default(none) %}
+        {% set state_value =
+          'unavailable' if source is none else source.state %}
+        {% set unavailable = source is none
+          or state_value | lower in ['unknown', 'unavailable', 'none', ''] %}
+        {% set invalid = require_numeric and source is not none
+          and not is_number(state_value) %}
+        {% set age = 999999 if source is none else
+          as_timestamp(now()) - as_timestamp(source.last_reported, 0) %}
+        {% set too_old =
+          age < 0 or age > stale_after_minutes | float(15) * 60 %}
+        {% set reason = 'unavailable' if unavailable else
+          'non_numeric' if invalid else
+          'timestamp_invalid' if age < 0 else
+          'stale' if too_old else 'fresh' %}
+        {{ {
+          'value': state_value,
+          'age_seconds': age | round(0) | int,
+          'is_stale': unavailable or invalid or too_old,
+          'reason': reason
+        } | to_json }}
+  - variables:
+      source_value: "{{ (guard_status | from_json).value }}"
+      source_age_seconds: "{{ (guard_status | from_json).age_seconds }}"
+      guard_is_stale: "{{ (guard_status | from_json).is_stale }}"
+      guard_reason: "{{ (guard_status | from_json).reason }}"
+  - choose:
+      - conditions: "{{ guard_is_stale }}"
+        sequence: !input stale_actions
+    default: !input recovery_actions
+
+mode: restart
+max_exceeded: silent

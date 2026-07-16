@@ -1,0 +1,37 @@
+script:
+  - id: publish_idm_mqtt_diagnostics
+    mode: restart
+    then:
+      - if:
+          condition:
+            mqtt.connected:
+          then:
+            - mqtt.publish_json:
+                topic: ${mqtt_topic_prefix}/diagnostics/state
+                qos: 1
+                retain: true
+                payload: |-
+                  root["schema_version"] = 1;
+                  root["device"] = App.get_name();
+                  root["mode"] = "room_sensor";
+                  root["online"] = id(idm_device_online).state;
+                  if (id(idm_room_temperature).has_state()) {
+                    root["temperature"] = id(idm_room_temperature).state;
+                  } else {
+                    root["temperature"] = nullptr;
+                  }
+                  if (id(idm_room_humidity).has_state()) {
+                    root["humidity"] = id(idm_room_humidity).state;
+                  } else {
+                    root["humidity"] = nullptr;
+                  }
+                  if (id(idm_wifi_rssi).has_state()) {
+                    root["wifi_rssi"] = id(idm_wifi_rssi).state;
+                  } else {
+                    root["wifi_rssi"] = nullptr;
+                  }
+                  if (id(idm_uptime).has_state()) {
+                    root["uptime_s"] = id(idm_uptime).state;
+                  } else {
+                    root["uptime_s"] = nullptr;
+                  }

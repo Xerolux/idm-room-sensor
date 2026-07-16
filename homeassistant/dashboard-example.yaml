@@ -3,9 +3,19 @@ cards:
   - type: entities
     title: IDM Climate Engine
     entities:
+      - sensor.idm_critical_room
+      - sensor.idm_critical_room_dew_point
+      - sensor.idm_climate_selection_reason
+      - sensor.idm_selected_source_age
       - sensor.idm_selected_external_room_temperature
       - sensor.idm_selected_external_humidity
       - sensor.idm_critical_room_dew_point_margin
+      - binary_sensor.idm_climate_input_stale
+      - binary_sensor.idm_selected_climate_uses_fallback
+      - input_text.idm_external_climate_publish_status
+      - input_datetime.idm_last_external_climate_publish
+      - sensor.idm_last_external_climate_publish_age
+      - binary_sensor.idm_external_climate_publish_problem
   - type: gauge
     entity: sensor.idm_critical_room_dew_point_margin
     name: Dew-point margin

@@ -1,1 +1,20 @@
-idf_component_register(SRCS "main.cpp" INCLUDE_DIRS "." "../../common")
+idf_component_register(
+    SRCS "main.cpp"
+    INCLUDE_DIRS
+        "."
+        "../../common"
+        "../../components/idm_bridge"
+    REQUIRES
+        app_update
+        esp_driver_i2c
+        esp_event
+        esp_http_client
+        esp_http_server
+        esp_https_ota
+        esp_netif
+        esp_timer
+        esp_wifi
+        json
+        mbedtls
+        nvs_flash
+)

@@ -10,3 +10,12 @@ Thumbs.db
 .idea/
 .esphome/
 secrets.yaml
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv-esphome/
+firmware/esp-idf/.pio/
+firmware/esp-idf/build/
+firmware/esp-idf/sdkconfig
+firmware/esp-idf/sdkconfig.*
+!firmware/esp-idf/sdkconfig.defaults

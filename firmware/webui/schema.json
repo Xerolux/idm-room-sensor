@@ -1,19 +1,161 @@
 {
-  "title": "IDM Smart Climate",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Xerolux/IDM-Smart-Climate-Platform/blob/main/firmware/webui/schema.json",
+  "title": "IDM local web UI contract",
   "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "implementation",
+    "local_assets",
+    "authentication_required",
+    "web_ota_enabled",
+    "sections",
+    "confirmation_timeout_s",
+    "calibration",
+    "dangerous_actions",
+    "diagnostic_export"
+  ],
   "properties": {
-    "strategy": {
-      "enum": [
-        "local",
-        "remote",
-        "hybrid",
-        "critical_room"
+    "schema_version": {
+      "const": 1
+    },
+    "implementation": {
+      "const": "esphome_web_server_v3"
+    },
+    "local_assets": {
+      "const": true
+    },
+    "authentication_required": {
+      "const": true
+    },
+    "web_ota_enabled": {
+      "const": false
+    },
+    "sections": {
+      "const": [
+        "status",
+        "commands",
+        "calibration",
+        "safety",
+        "diagnostics"
       ]
     },
-    "stale_timeout_s": {
-      "type": "integer",
-      "minimum": 10,
-      "maximum": 3600
+    "confirmation_timeout_s": {
+      "const": 60
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "humidity_code_min",
+        "humidity_code_max",
+        "temperature_resistance_min",
+        "temperature_resistance_max",
+        "temperature_code_inverted",
+        "constraints"
+      ],
+      "properties": {
+        "humidity_code_min": {
+          "$ref": "#/$defs/dacCode"
+        },
+        "humidity_code_max": {
+          "$ref": "#/$defs/dacCode"
+        },
+        "temperature_resistance_min": {
+          "$ref": "#/$defs/resistance"
+        },
+        "temperature_resistance_max": {
+          "$ref": "#/$defs/resistance"
+        },
+        "temperature_code_inverted": {
+          "type": "boolean"
+        },
+        "constraints": {
+          "const": [
+            "humidity_code_min < humidity_code_max",
+            "temperature_resistance_min < temperature_resistance_max"
+          ]
+        }
+      }
+    },
+    "dangerous_actions": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "apply_calibration"
+        },
+        {
+          "const": "factory_reset_calibration"
+        }
+      ],
+      "items": false
+    },
+    "diagnostic_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "schema",
+        "refresh_interval_s"
+      ],
+      "properties": {
+        "path": {
+          "const": "/text_sensor/idm_webui_diagnostic_export"
+        },
+        "schema": {
+          "const": "diagnostic-export.schema.json"
+        },
+        "refresh_interval_s": {
+          "const": 30
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dacCode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum",
+        "maximum",
+        "step"
+      ],
+      "properties": {
+        "minimum": {
+          "const": 0
+        },
+        "maximum": {
+          "const": 4095
+        },
+        "step": {
+          "const": 1
+        }
+      }
+    },
+    "resistance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum",
+        "maximum",
+        "step",
+        "unit"
+      ],
+      "properties": {
+        "minimum": {
+          "const": 100
+        },
+        "maximum": {
+          "const": 50000
+        },
+        "step": {
+          "const": 10
+        },
+        "unit": {
+          "const": "ohm"
+        }
+      }
     }
   }
 }

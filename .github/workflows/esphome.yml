@@ -1,0 +1,51 @@
+name: ESPHome
+
+on:
+  push:
+    paths:
+      - ".github/workflows/esphome.yml"
+      - "firmware/**"
+      - "hardware/*/firmware/**"
+      - "tools/check_esphome.py"
+  pull_request:
+    paths:
+      - ".github/workflows/esphome.yml"
+      - "firmware/**"
+      - "hardware/*/firmware/**"
+      - "tools/check_esphome.py"
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: firmware/requirements.txt
+      - name: Install pinned ESPHome
+        run: python -m pip install -r firmware/requirements.txt
+      - name: Validate and compile every ESPHome target
+        run: python tools/check_esphome.py --compile
+
+  native-esp-idf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/esp-idf/platformio.ini', 'firmware/esp-idf/sdkconfig.defaults') }}
+          restore-keys: |
+            platformio-${{ runner.os }}-
+      - name: Install PlatformIO
+        run: python -m pip install platformio==6.1.19
+      - name: Compile native ESP-IDF target
+        run: platformio run --project-dir firmware/esp-idf

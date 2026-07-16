@@ -11,8 +11,8 @@ set_external_climate:
       required: true
       selector:
         number:
-          min: -20
-          max: 60
+          min: 15
+          max: 30
           step: 0.1
     humidity:
       required: true

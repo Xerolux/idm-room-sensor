@@ -1,0 +1,98 @@
+mqtt:
+  on_json_message:
+    - topic: ${mqtt_topic_prefix}/command/climate/set
+      qos: 1
+      then:
+        - lambda: |-
+            auto *bridge = id(climate_bridge);
+            auto reject_command = [&bridge]() {
+              bridge->set_command_metadata("mqtt_invalid", 0);
+              bridge->apply_fallback();
+            };
+            const bool humidity_valid = x["humidity"].is<float>();
+            const bool temperature_valid = x["temperature"].is<float>();
+            if (!humidity_valid || !temperature_valid) {
+              reject_command();
+              return;
+            }
+            const float humidity = x["humidity"].as<float>();
+            const float temperature = x["temperature"].as<float>();
+            int quality = 100;
+            if (!x["quality"].isNull()) {
+              if (!x["quality"].is<int>()) {
+                reject_command();
+                return;
+              }
+              quality = x["quality"].as<int>();
+            }
+            std::string source = "mqtt";
+            if (!x["source"].isNull()) {
+              if (!x["source"].is<const char *>()) {
+                reject_command();
+                return;
+              }
+              source = x["source"].as<const char *>();
+            }
+            if (!std::isfinite(humidity) || humidity < 0.0f ||
+                humidity > 100.0f || !std::isfinite(temperature) ||
+                temperature < -20.0f || temperature > 60.0f ||
+                quality < 0 || quality > 100 || source.empty() ||
+                source.size() > 64) {
+              reject_command();
+              return;
+            }
+            bridge->set_command_metadata(source, quality);
+            bridge->set_values(humidity, temperature);
+        - script.execute: publish_idm_mqtt_diagnostics
+
+script:
+  - id: publish_idm_mqtt_diagnostics
+    mode: restart
+    then:
+      - if:
+          condition:
+            mqtt.connected:
+          then:
+            - mqtt.publish_json:
+                topic: ${mqtt_topic_prefix}/diagnostics/state
+                qos: 1
+                retain: true
+                payload: |-
+                  root["schema_version"] = 1;
+                  root["device"] = App.get_name();
+                  root["mode"] = "analog_bridge";
+                  root["bridge_state"] = id(idm_bridge_state).state;
+                  root["bridge_error"] = id(idm_bridge_error).state;
+                  root["safe_active"] = id(idm_safe_active).state;
+                  root["stale"] = id(idm_stale).state;
+                  root["fault"] = id(idm_bridge_fault).state;
+                  root["output_ready"] = id(idm_output_ready).state;
+                  root["effective_humidity"] =
+                      id(idm_effective_humidity).state;
+                  root["effective_temperature"] =
+                      id(idm_effective_temperature).state;
+                  root["command_source"] = id(idm_command_source).state;
+                  root["command_quality"] = id(idm_command_quality).state;
+                  root["output_fault"] = id(idm_analog_output_fault).state;
+                  root["output_error"] = id(idm_analog_output_error).state;
+                  root["humidity_dac_code"] =
+                      id(idm_humidity_dac_code).state;
+                  root["temperature_digipot_code"] =
+                      id(idm_temperature_digipot_code).state;
+                  if (id(idm_target_resistance).has_state()) {
+                    root["target_resistance_ohm"] =
+                        id(idm_target_resistance).state;
+                  } else {
+                    root["target_resistance_ohm"] = nullptr;
+                  }
+                  root["calibration_status"] =
+                      id(idm_calibration_status).state;
+                  root["calibration_version"] =
+                      id(idm_calibration_version).state;
+                  root["calibration_using_factory"] =
+                      id(idm_calibration_using_factory).state;
+                  if (id(idm_uptime).has_state()) {
+                    root["uptime_s"] = id(idm_uptime).state;
+                  } else {
+                    root["uptime_s"] = nullptr;
+                  }

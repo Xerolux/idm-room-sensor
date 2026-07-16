@@ -1,0 +1,339 @@
+web_server:
+  id: idm_web_server
+  port: ${web_port}
+  version: 3
+  local: true
+  include_internal: false
+  ota: false
+  log: true
+  auth:
+    username: ${web_username}
+    password: ${web_password}
+  sorting_groups:
+    - id: idm_web_status_group
+      name: "1 Status"
+      sorting_weight: 10
+    - id: idm_web_commands_group
+      name: "2 Sollwerte"
+      sorting_weight: 20
+    - id: idm_web_calibration_group
+      name: "3 Kalibrierung"
+      sorting_weight: 30
+    - id: idm_web_safety_group
+      name: "4 Sicherheit"
+      sorting_weight: 40
+    - id: idm_web_diagnostics_group
+      name: "5 Diagnose und Export"
+      sorting_weight: 50
+
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - script.execute: idm_web_sync_calibration_editor
+        - text_sensor.template.publish:
+            id: idm_web_action_status
+            state: "ready"
+
+script:
+  - id: idm_web_sync_calibration_editor
+    mode: restart
+    then:
+      - lambda: |-
+          const auto &calibration = id(idm_analog_outputs)->calibration();
+          id(idm_web_humidity_code_min)->publish_state(
+              calibration.humidity_code_min);
+          id(idm_web_humidity_code_max)->publish_state(
+              calibration.humidity_code_max);
+          id(idm_web_temperature_resistance_min)->publish_state(
+              calibration.temperature_resistance_min);
+          id(idm_web_temperature_resistance_max)->publish_state(
+              calibration.temperature_resistance_max);
+          id(idm_web_temperature_code_inverted)->publish_state(
+              calibration.temperature_code_inverted);
+
+  - id: idm_web_expire_confirmation
+    mode: restart
+    then:
+      - delay: 60s
+      - switch.template.publish:
+          id: idm_web_dangerous_action_confirmation
+          state: OFF
+      - text_sensor.template.publish:
+          id: idm_web_action_status
+          state: "confirmation_expired"
+
+number:
+  - platform: template
+    id: idm_web_humidity_code_min
+    name: "IDM Web Humidity Code Minimum"
+    icon: mdi:tune-vertical
+    entity_category: config
+    optimistic: true
+    restore_value: false
+    initial_value: 0
+    min_value: 0
+    max_value: 4095
+    step: 1
+    mode: box
+    web_server:
+      sorting_group_id: idm_web_calibration_group
+      sorting_weight: 10
+
+  - platform: template
+    id: idm_web_humidity_code_max
+    name: "IDM Web Humidity Code Maximum"
+    icon: mdi:tune-vertical
+    entity_category: config
+    optimistic: true
+    restore_value: false
+    initial_value: 4095
+    min_value: 0
+    max_value: 4095
+    step: 1
+    mode: box
+    web_server:
+      sorting_group_id: idm_web_calibration_group
+      sorting_weight: 20
+
+  - platform: template
+    id: idm_web_temperature_resistance_min
+    name: "IDM Web Temperature Resistance Minimum"
+    icon: mdi:resistor
+    entity_category: config
+    optimistic: true
+    restore_value: false
+    initial_value: 650
+    min_value: 100
+    max_value: 50000
+    step: 10
+    unit_of_measurement: "Ω"
+    mode: box
+    web_server:
+      sorting_group_id: idm_web_calibration_group
+      sorting_weight: 30
+
+  - platform: template
+    id: idm_web_temperature_resistance_max
+    name: "IDM Web Temperature Resistance Maximum"
+    icon: mdi:resistor
+    entity_category: config
+    optimistic: true
+    restore_value: false
+    initial_value: 3000
+    min_value: 100
+    max_value: 50000
+    step: 10
+    unit_of_measurement: "Ω"
+    mode: box
+    web_server:
+      sorting_group_id: idm_web_calibration_group
+      sorting_weight: 40
+
+switch:
+  - platform: template
+    id: idm_web_temperature_code_inverted
+    name: "IDM Web Temperature Code Inverted"
+    icon: mdi:swap-vertical
+    entity_category: config
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    web_server:
+      sorting_group_id: idm_web_calibration_group
+      sorting_weight: 50
+
+  - platform: template
+    id: idm_web_dangerous_action_confirmation
+    name: "IDM Web Confirm Dangerous Action"
+    icon: mdi:shield-check
+    entity_category: config
+    optimistic: false
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - switch.template.publish:
+          id: idm_web_dangerous_action_confirmation
+          state: ON
+      - text_sensor.template.publish:
+          id: idm_web_action_status
+          state: "confirmation_armed"
+      - script.execute: idm_web_expire_confirmation
+    turn_off_action:
+      - script.stop: idm_web_expire_confirmation
+      - switch.template.publish:
+          id: idm_web_dangerous_action_confirmation
+          state: OFF
+    web_server:
+      sorting_group_id: idm_web_safety_group
+      sorting_weight: 10
+
+button:
+  - platform: template
+    id: idm_web_reload_calibration
+    name: "IDM Web Reload Active Calibration"
+    icon: mdi:restore
+    entity_category: config
+    on_press:
+      - script.execute: idm_web_sync_calibration_editor
+      - text_sensor.template.publish:
+          id: idm_web_action_status
+          state: "editor_reloaded"
+    web_server:
+      sorting_group_id: idm_web_calibration_group
+      sorting_weight: 60
+
+  - platform: template
+    id: idm_web_apply_calibration
+    name: "IDM Web Apply Calibration"
+    icon: mdi:content-save-check
+    entity_category: config
+    on_press:
+      - if:
+          condition:
+            switch.is_on: idm_web_dangerous_action_confirmation
+          then:
+            - lambda: |-
+                const bool accepted = id(idm_analog_outputs)->set_calibration(
+                    static_cast<uint16_t>(
+                        std::lround(id(idm_web_humidity_code_min)->state)),
+                    static_cast<uint16_t>(
+                        std::lround(id(idm_web_humidity_code_max)->state)),
+                    id(idm_web_temperature_resistance_min)->state,
+                    id(idm_web_temperature_resistance_max)->state,
+                    id(idm_web_temperature_code_inverted)->state);
+                id(idm_web_action_status)->publish_state(
+                    accepted ? "calibration_applied" : "calibration_rejected");
+            - script.execute: idm_web_sync_calibration_editor
+            - switch.turn_off: idm_web_dangerous_action_confirmation
+            - script.execute: publish_idm_mqtt_diagnostics
+          else:
+            - text_sensor.template.publish:
+                id: idm_web_action_status
+                state: "confirmation_required"
+    web_server:
+      sorting_group_id: idm_web_safety_group
+      sorting_weight: 20
+
+  - platform: template
+    id: idm_web_factory_reset_calibration
+    name: "IDM Web Factory Reset Calibration"
+    icon: mdi:alert-octagon
+    entity_category: config
+    on_press:
+      - if:
+          condition:
+            switch.is_on: idm_web_dangerous_action_confirmation
+          then:
+            - lambda: |-
+                const bool accepted =
+                    id(idm_analog_outputs)->reset_calibration();
+                id(idm_web_action_status)->publish_state(
+                    accepted ? "factory_reset_applied" :
+                               "factory_reset_failed");
+            - script.execute: idm_web_sync_calibration_editor
+            - switch.turn_off: idm_web_dangerous_action_confirmation
+            - script.execute: publish_idm_mqtt_diagnostics
+          else:
+            - text_sensor.template.publish:
+                id: idm_web_action_status
+                state: "confirmation_required"
+    web_server:
+      sorting_group_id: idm_web_safety_group
+      sorting_weight: 30
+
+  - platform: template
+    id: idm_web_refresh_diagnostic_export
+    name: "IDM Web Refresh Diagnostic Export"
+    icon: mdi:file-refresh
+    entity_category: diagnostic
+    on_press:
+      - component.update: idm_webui_diagnostic_export
+      - text_sensor.template.publish:
+          id: idm_web_action_status
+          state: "diagnostic_export_refreshed"
+    web_server:
+      sorting_group_id: idm_web_diagnostics_group
+      sorting_weight: 20
+
+sensor:
+  - platform: wifi_signal
+    id: idm_web_wifi_rssi
+    name: "IDM Web WiFi RSSI"
+    entity_category: diagnostic
+    update_interval: 30s
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 90
+
+text_sensor:
+  - platform: template
+    id: idm_web_action_status
+    name: "IDM Web Action Status"
+    icon: mdi:list-status
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: idm_web_safety_group
+      sorting_weight: 40
+
+  - platform: template
+    id: idm_webui_diagnostic_export
+    name: "IDM Webui Diagnostic Export"
+    icon: mdi:code-json
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: |-
+      const auto &calibration = id(idm_analog_outputs)->calibration();
+      return json::build_json([&](JsonObject root) {
+        root["schema_version"] = 1;
+        root["device"] = App.get_name();
+        root["mode"] = "analog_bridge";
+        root["bridge_state"] = id(idm_bridge_state).state;
+        root["bridge_error"] = id(idm_bridge_error).state;
+        root["safe_active"] = id(idm_safe_active).state;
+        root["stale"] = id(idm_stale).state;
+        root["fault"] = id(idm_bridge_fault).state;
+        root["output_ready"] = id(idm_output_ready).state;
+        root["effective_humidity"] = id(idm_effective_humidity).state;
+        root["effective_temperature"] = id(idm_effective_temperature).state;
+        root["command_source"] = id(idm_command_source).state;
+        root["command_quality"] = id(idm_command_quality).state;
+        root["output_fault"] = id(idm_analog_output_fault).state;
+        root["output_error"] = id(idm_analog_output_error).state;
+        root["humidity_dac_code"] = id(idm_humidity_dac_code).state;
+        root["temperature_digipot_code"] =
+            id(idm_temperature_digipot_code).state;
+        if (id(idm_target_resistance).has_state()) {
+          root["target_resistance_ohm"] =
+              id(idm_target_resistance).state;
+        } else {
+          root["target_resistance_ohm"] = nullptr;
+        }
+        root["calibration_status"] = id(idm_calibration_status).state;
+        root["calibration_version"] = id(idm_calibration_version).state;
+        root["calibration_using_factory"] =
+            id(idm_calibration_using_factory).state;
+        root["calibration_humidity_code_min"] =
+            calibration.humidity_code_min;
+        root["calibration_humidity_code_max"] =
+            calibration.humidity_code_max;
+        root["calibration_temperature_resistance_min"] =
+            calibration.temperature_resistance_min;
+        root["calibration_temperature_resistance_max"] =
+            calibration.temperature_resistance_max;
+        root["calibration_temperature_code_inverted"] =
+            calibration.temperature_code_inverted;
+        root["mqtt_connected"] = id(idm_mqtt_client).is_connected();
+        root["api_connected"] = api_is_connected();
+        if (id(idm_uptime).has_state()) {
+          root["uptime_s"] = id(idm_uptime).state;
+        } else {
+          root["uptime_s"] = nullptr;
+        }
+        if (id(idm_web_wifi_rssi).has_state()) {
+          root["wifi_rssi_dbm"] = id(idm_web_wifi_rssi).state;
+        } else {
+          root["wifi_rssi_dbm"] = nullptr;
+        }
+      });
+    web_server:
+      sorting_group_id: idm_web_diagnostics_group
+      sorting_weight: 10

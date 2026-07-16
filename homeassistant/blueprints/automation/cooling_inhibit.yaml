@@ -1,13 +1,68 @@
 blueprint:
   name: IDM cooling inhibit
+  description: >
+    Runs user-supplied inhibit actions when the dew-point margin falls below
+    the unsafe threshold and clear actions after it rises above a separate
+    recovery threshold. Keep the recovery threshold higher to provide
+    hysteresis.
   domain: automation
   input:
     margin_sensor:
+      name: Dew-point margin sensor
       selector:
         entity:
           domain: sensor
-trigger:
-  - platform: numeric_state
+    inhibit_below:
+      name: Inhibit below
+      description: Margin in kelvin below which cooling must be inhibited.
+      default: 2
+      selector:
+        number:
+          min: -5
+          max: 20
+          step: 0.1
+          unit_of_measurement: K
+          mode: box
+    clear_above:
+      name: Clear above
+      description: >
+        Margin in kelvin above which the inhibit may be cleared. Set this
+        higher than the inhibit threshold.
+      default: 4
+      selector:
+        number:
+          min: -5
+          max: 20
+          step: 0.1
+          unit_of_measurement: K
+          mode: box
+    inhibit_actions:
+      name: Inhibit actions
+      description: Actions that place cooling in a safe inhibited state.
+      default: []
+      selector:
+        action:
+    clear_actions:
+      name: Clear actions
+      description: Actions that clear the inhibit after the recovery threshold.
+      default: []
+      selector:
+        action:
+
+triggers:
+  - trigger: numeric_state
+    id: inhibit
     entity_id: !input margin_sensor
-    below: 2
-action: []
+    below: !input inhibit_below
+  - trigger: numeric_state
+    id: clear
+    entity_id: !input margin_sensor
+    above: !input clear_above
+
+actions:
+  - choose:
+      - conditions: "{{ trigger.id == 'inhibit' }}"
+        sequence: !input inhibit_actions
+    default: !input clear_actions
+
+mode: restart

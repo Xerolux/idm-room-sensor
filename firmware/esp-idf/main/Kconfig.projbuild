@@ -1,0 +1,100 @@
+menu "IDM native firmware"
+
+config IDM_WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+    help
+        Leave empty to run in local-only fail-safe mode without networking.
+
+config IDM_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+
+config IDM_HOSTNAME
+    string "Network hostname"
+    default "idm-smart-climate-native"
+
+config IDM_API_TOKEN
+    string "HTTP bearer token"
+    default ""
+    help
+        Mutating HTTP endpoints are disabled while this value is empty.
+        Use at least 16 random characters and restrict the device to a trusted
+        commissioning network.
+
+config IDM_HTTP_PORT
+    int "HTTP diagnostics/API port"
+    range 1 65535
+    default 80
+
+config IDM_I2C_SDA_GPIO
+    int "I2C SDA GPIO"
+    range 0 21
+    default 8
+
+config IDM_I2C_SCL_GPIO
+    int "I2C SCL GPIO"
+    range 0 21
+    default 9
+
+config IDM_HUMIDITY_I2C_ADDRESS
+    hex "MCP4725 humidity DAC address"
+    range 0x08 0x77
+    default 0x60
+
+config IDM_TEMPERATURE_I2C_ADDRESS
+    hex "AD5242 temperature digipot address"
+    range 0x08 0x77
+    default 0x2C
+
+config IDM_FALLBACK_HUMIDITY
+    string "Fail-safe humidity percentage"
+    default "80.0"
+
+config IDM_FALLBACK_TEMPERATURE
+    string "Fail-safe temperature in degrees Celsius"
+    default "28.0"
+
+config IDM_STALE_TIMEOUT_SECONDS
+    int "Command stale timeout in seconds"
+    range 10 3600
+    default 120
+
+config IDM_MINIMUM_COMMAND_QUALITY
+    int "Minimum accepted command quality"
+    range 0 100
+    default 50
+
+config IDM_FACTORY_HUMIDITY_CODE_MIN
+    int "Factory humidity DAC minimum"
+    range 0 4094
+    default 0
+
+config IDM_FACTORY_HUMIDITY_CODE_MAX
+    int "Factory humidity DAC maximum"
+    range 1 4095
+    default 4095
+
+config IDM_FACTORY_TEMPERATURE_RESISTANCE_MIN
+    string "Factory temperature resistance minimum in ohms"
+    default "650.0"
+
+config IDM_FACTORY_TEMPERATURE_RESISTANCE_MAX
+    string "Factory temperature resistance maximum in ohms"
+    default "3000.0"
+
+config IDM_FACTORY_TEMPERATURE_CODE_INVERTED
+    bool "Invert the temperature digipot code"
+    default n
+
+config IDM_DIAGNOSTIC_LOG_INTERVAL_SECONDS
+    int "Periodic diagnostic log interval in seconds"
+    range 5 3600
+    default 30
+
+config IDM_OTA_TASK_STACK_SIZE
+    int "HTTPS OTA task stack size"
+    range 6144 16384
+    default 8192
+
+endmenu

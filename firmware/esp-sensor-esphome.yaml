@@ -1,13 +1,31 @@
+substitutions:
+  device_name: idm-smart-climate-platform-esp
+  friendly_name: IDM Smart Climate Platform ESP Sensor
+  mqtt_enabled: "false"
+  mqtt_broker: 192.0.2.1
+  mqtt_port: "1883"
+  mqtt_topic_prefix: idm/idm-smart-climate-platform-esp
+
+packages:
+  mqtt_transport: !include esphome/packages/mqtt.yaml
+  mqtt_diagnostics: !include esphome/packages/room-sensor-mqtt.yaml
+  diagnostics: !include esphome/packages/diagnostics.yaml
+
 esphome:
-  name: IDM-Smart-Climate-Platform-esp
+  name: ${device_name}
+  friendly_name: ${friendly_name}
 esp32:
   board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
 wifi:
   ap:
     ssid: "IDM Smart Climate Platform Setup"
+captive_portal:
 logger:
 api:
 ota:
+  - platform: esphome
 i2c:
   sda: GPIO8
   scl: GPIO9
@@ -15,8 +33,12 @@ sensor:
   - platform: sht4x
     temperature:
       name: "IDM Room Temperature"
+      id: idm_room_temperature
     humidity:
       name: "IDM Room Humidity"
-      id: rh
+      id: idm_room_humidity
+      on_value:
+        then:
+          - script.execute: publish_idm_mqtt_diagnostics
     update_interval: 10s
 # MCP4725: RH 0..100% -> DAC 0..4095; OPV auf 0..10V kalibrieren.
