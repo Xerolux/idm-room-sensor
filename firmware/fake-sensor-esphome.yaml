@@ -1,15 +1,25 @@
 substitutions:
   device_name: idm-fake-sensor
+  idm_bridge_components: components
   fallback_humidity: "80.0"
   fallback_temperature: "28.0"
   timeout_seconds: "120"
+  mqtt_enabled: "false"
+  mqtt_broker: 192.0.2.1
+  mqtt_port: "1883"
+  mqtt_topic_prefix: idm/idm-fake-sensor
+  web_port: "80"
+  web_username: idm-admin
+  web_password: CHANGE-ME-BEFORE-INSTALLATION
+
+packages:
+  mqtt_transport: !include esphome/packages/mqtt.yaml
+  mqtt_diagnostics: !include esphome/packages/fake-sensor-mqtt.yaml
+  local_web_ui: !include esphome/packages/fake-sensor-webui.yaml
 
 esphome:
   name: ${device_name}
-  on_boot:
-    priority: -100
-    then:
-      - script.execute: apply_fallback
+  friendly_name: IDM Fake Sensor
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -20,20 +30,146 @@ wifi:
   ap:
     ssid: "IDM Fake Sensor Setup"
 
+captive_portal:
 logger:
 api:
 ota:
+  - platform: esphome
 
 i2c:
   sda: GPIO8
   scl: GPIO9
   scan: true
 
-globals:
-  - id: last_update_ms
-    type: uint32_t
-    restore_value: no
-    initial_value: '0'
+external_components:
+  - source:
+      type: local
+      path: ${idm_bridge_components}
+
+idm_bridge:
+  id: climate_bridge
+  stale_timeout: ${timeout_seconds}s
+  fallback_humidity: ${fallback_humidity}
+  fallback_temperature: ${fallback_temperature}
+  analog_output:
+    id: idm_analog_outputs
+    humidity_address: 0x60
+    temperature_address: 0x2C
+    humidity_dac_min_code: 0
+    humidity_dac_max_code: 4095
+    temperature_resistance_min: 650
+    temperature_resistance_max: 3000
+    temperature_code_inverted: false
+    calibration_preference_id: 0x49444D43
+    accept_unverified_kty_calibration: true
+    output_fault:
+      name: "IDM Analog Output Fault"
+      id: idm_analog_output_fault
+      web_server:
+        sorting_group_id: idm_web_status_group
+        sorting_weight: 50
+    output_error:
+      name: "IDM Analog Output Error"
+      id: idm_analog_output_error
+      web_server:
+        sorting_group_id: idm_web_status_group
+        sorting_weight: 60
+    humidity_dac_code:
+      name: "IDM Humidity DAC Code"
+      id: idm_humidity_dac_code
+      web_server:
+        sorting_group_id: idm_web_diagnostics_group
+        sorting_weight: 30
+    temperature_digipot_code:
+      name: "IDM Temperature Digipot Code"
+      id: idm_temperature_digipot_code
+      web_server:
+        sorting_group_id: idm_web_diagnostics_group
+        sorting_weight: 40
+    target_resistance:
+      name: "IDM Target KTY Resistance"
+      id: idm_target_resistance
+      web_server:
+        sorting_group_id: idm_web_diagnostics_group
+        sorting_weight: 50
+    calibration_status:
+      name: "IDM Calibration Status"
+      id: idm_calibration_status
+      web_server:
+        sorting_group_id: idm_web_calibration_group
+        sorting_weight: 70
+    calibration_version:
+      name: "IDM Calibration Version"
+      id: idm_calibration_version
+      web_server:
+        sorting_group_id: idm_web_calibration_group
+        sorting_weight: 80
+    calibration_using_factory:
+      name: "IDM Factory Calibration Active"
+      id: idm_calibration_using_factory
+      web_server:
+        sorting_group_id: idm_web_calibration_group
+        sorting_weight: 90
+  effective_humidity:
+    name: "IDM Effective Humidity"
+    id: idm_effective_humidity
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 10
+  effective_temperature:
+    name: "IDM Effective Temperature"
+    id: idm_effective_temperature
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 20
+  safe_active:
+    name: "IDM Safe Fallback Active"
+    id: idm_safe_active
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 30
+  stale:
+    name: "IDM Command Stale"
+    id: idm_stale
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 40
+  fault:
+    name: "IDM Bridge Fault"
+    id: idm_bridge_fault
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 70
+  output_ready:
+    name: "IDM Analog Outputs Ready"
+    id: idm_output_ready
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 80
+  state:
+    name: "IDM Bridge State"
+    id: idm_bridge_state
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 90
+  error:
+    name: "IDM Bridge Error"
+    id: idm_bridge_error
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 100
+  command_source:
+    name: "IDM Command Source"
+    id: idm_command_source
+    web_server:
+      sorting_group_id: idm_web_commands_group
+      sorting_weight: 30
+  command_quality:
+    name: "IDM Command Quality"
+    id: idm_command_quality
+    web_server:
+      sorting_group_id: idm_web_commands_group
+      sorting_weight: 40
 
 number:
   - platform: template
@@ -45,10 +181,23 @@ number:
     optimistic: true
     restore_value: true
     initial_value: 80
+    state_topic: ${mqtt_topic_prefix}/command/humidity/state
+    command_topic: ${mqtt_topic_prefix}/command/humidity/set
+    qos: 1
+    subscribe_qos: 1
+    retain: true
+    command_retain: false
+    web_server:
+      sorting_group_id: idm_web_commands_group
+      sorting_weight: 10
     set_action:
-      - lambda: |-
-          id(last_update_ms) = millis();
-      - script.execute: update_outputs
+      - idm_bridge.set_values:
+          id: climate_bridge
+          humidity: !lambda return x;
+          temperature: !lambda return id(target_temperature).state;
+          source: esphome_number
+          quality: 100
+      - script.execute: publish_idm_mqtt_diagnostics
 
   - platform: template
     name: "IDM Simulated Temperature"
@@ -59,45 +208,50 @@ number:
     optimistic: true
     restore_value: true
     initial_value: 28
+    state_topic: ${mqtt_topic_prefix}/command/temperature/state
+    command_topic: ${mqtt_topic_prefix}/command/temperature/set
+    qos: 1
+    subscribe_qos: 1
+    retain: true
+    command_retain: false
+    web_server:
+      sorting_group_id: idm_web_commands_group
+      sorting_weight: 20
     set_action:
-      - lambda: |-
-          id(last_update_ms) = millis();
-      - script.execute: update_outputs
-
-interval:
-  - interval: 10s
-    then:
-      - if:
-          condition:
-            lambda: |-
-              return (millis() - id(last_update_ms)) > (${timeout_seconds} * 1000UL);
-          then:
-            - script.execute: apply_fallback
+      - idm_bridge.set_values:
+          id: climate_bridge
+          humidity: !lambda return id(target_humidity).state;
+          temperature: !lambda return x;
+          source: esphome_number
+          quality: 100
+      - script.execute: publish_idm_mqtt_diagnostics
 
 script:
-  - id: apply_fallback
+  - id: store_idm_calibration
+    parameters:
+      humidity_code_min: int
+      humidity_code_max: int
+      temperature_resistance_min: float
+      temperature_resistance_max: float
+      temperature_code_inverted: bool
     then:
-      - number.set:
-          id: target_humidity
-          value: ${fallback_humidity}
-      - number.set:
-          id: target_temperature
-          value: ${fallback_temperature}
-      - script.execute: update_outputs
+      - idm_bridge.set_calibration:
+          id: idm_analog_outputs
+          humidity_dac_min_code: !lambda return humidity_code_min;
+          humidity_dac_max_code: !lambda return humidity_code_max;
+          temperature_resistance_min: !lambda return temperature_resistance_min;
+          temperature_resistance_max: !lambda return temperature_resistance_max;
+          temperature_code_inverted: !lambda return temperature_code_inverted;
+      - script.execute: publish_idm_mqtt_diagnostics
+  - id: reset_idm_calibration
+    then:
+      - idm_bridge.reset_calibration: idm_analog_outputs
+      - script.execute: publish_idm_mqtt_diagnostics
 
-  - id: update_outputs
-    then:
-      - lambda: |-
-          /*
-           * Prototype logic:
-           * 1) RH: MCP4725 code = humidity / 100 * 4095.
-           *    Analog gain stage is calibrated so 4095 -> 10.000 V.
-           *
-           * 2) Temperature: Convert target °C to KTY81-210 equivalent resistance.
-           *    Then map resistance to AD5242 code using measured end-to-end
-           *    resistance and wiper resistance. Store calibration constants below.
-           *
-           * Replace these comments with a small custom component that writes:
-           * - MCP4725 at I2C address 0x60
-           * - AD5242 at I2C address 0x2C
-           */
+sensor:
+  - platform: uptime
+    name: "IDM Fake Sensor Uptime"
+    id: idm_uptime
+    web_server:
+      sorting_group_id: idm_web_status_group
+      sorting_weight: 110

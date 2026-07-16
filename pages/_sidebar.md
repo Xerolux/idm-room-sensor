@@ -3,6 +3,7 @@
 - [Hardware](hardware.md)
 - [Home Assistant](home-assistant.md)
 - [ESPHome](esphome.md)
+- [Native ESP-IDF](native-esp-idf.md)
 - [Cooling safety](cooling-safety.md)
 - [Validation](validation.md)
 - [Help wanted](help-wanted.md)

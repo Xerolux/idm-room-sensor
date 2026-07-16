@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Xerolux/IDM-Smart-Climate-Platform/blob/main/firmware/mqtt/climate-command.schema.json",
+  "title": "IDM atomic climate command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["humidity", "temperature"],
+  "properties": {
+    "humidity": {"type": "number", "minimum": 0, "maximum": 100},
+    "temperature": {"type": "number", "minimum": -20, "maximum": 60},
+    "source": {"type": "string", "minLength": 1, "maxLength": 64},
+    "quality": {"type": "integer", "minimum": 0, "maximum": 100}
+  }
+}

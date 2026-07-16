@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Xerolux/IDM-Smart-Climate-Platform/blob/main/firmware/mqtt/room-diagnostics.schema.json",
+  "title": "IDM room sensor diagnostics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "device",
+    "mode",
+    "online",
+    "temperature",
+    "humidity",
+    "wifi_rssi",
+    "uptime_s"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "device": {"type": "string", "minLength": 1},
+    "mode": {"const": "room_sensor"},
+    "online": {"type": "boolean"},
+    "temperature": {"type": ["number", "null"]},
+    "humidity": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "wifi_rssi": {"type": ["number", "null"]},
+    "uptime_s": {"type": ["number", "null"], "minimum": 0}
+  }
+}

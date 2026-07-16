@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idm-smart-climate.local/schemas/native-diagnostics-v1.json",
+  "title": "IDM native ESP-IDF diagnostic payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "project",
+    "firmware_version",
+    "running_partition",
+    "bridge_state",
+    "bridge_error",
+    "safe_active",
+    "stale",
+    "fault",
+    "effective_humidity",
+    "effective_temperature",
+    "dew_point_c",
+    "command_source",
+    "command_status",
+    "command_quality",
+    "command_age_ms",
+    "output_fault",
+    "output_error",
+    "output_attempts",
+    "output_failures",
+    "humidity_dac_code",
+    "temperature_digipot_code",
+    "temperature_resistance_ohm",
+    "calibration_humidity_code_min",
+    "calibration_humidity_code_max",
+    "calibration_temperature_resistance_min",
+    "calibration_temperature_resistance_max",
+    "calibration_temperature_code_inverted",
+    "network_connected",
+    "mutating_api_enabled",
+    "ota_status",
+    "uptime_s",
+    "free_heap_bytes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "mode": {
+      "const": "native_esp_idf"
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "firmware_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "running_partition": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bridge_state": {
+      "enum": [
+        "startup_safe",
+        "active",
+        "manual_safe",
+        "stale_safe",
+        "invalid_safe",
+        "output_fault_safe",
+        "unknown"
+      ]
+    },
+    "bridge_error": {
+      "enum": [
+        "none",
+        "stale_input",
+        "invalid_humidity",
+        "invalid_temperature",
+        "invalid_values",
+        "output_failure",
+        "unknown"
+      ]
+    },
+    "safe_active": {
+      "type": "boolean"
+    },
+    "stale": {
+      "type": "boolean"
+    },
+    "fault": {
+      "type": "boolean"
+    },
+    "effective_humidity": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "effective_temperature": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": -20,
+      "maximum": 60
+    },
+    "dew_point_c": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "command_source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "command_status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "command_quality": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "command_age_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "output_fault": {
+      "type": "boolean"
+    },
+    "output_error": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_attempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "output_failures": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "humidity_dac_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4095
+    },
+    "temperature_digipot_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "temperature_resistance_ohm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 100,
+      "maximum": 50000
+    },
+    "calibration_humidity_code_min": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4094
+    },
+    "calibration_humidity_code_max": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4095
+    },
+    "calibration_temperature_resistance_min": {
+      "type": "number",
+      "minimum": 100,
+      "maximum": 50000
+    },
+    "calibration_temperature_resistance_max": {
+      "type": "number",
+      "minimum": 100,
+      "maximum": 50000
+    },
+    "calibration_temperature_code_inverted": {
+      "type": "boolean"
+    },
+    "network_connected": {
+      "type": "boolean"
+    },
+    "mutating_api_enabled": {
+      "type": "boolean"
+    },
+    "ota_status": {
+      "enum": [
+        "idle",
+        "queued",
+        "downloading",
+        "rebooting",
+        "failed"
+      ]
+    },
+    "uptime_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "free_heap_bytes": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

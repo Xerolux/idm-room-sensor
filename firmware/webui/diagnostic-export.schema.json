@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Xerolux/IDM-Smart-Climate-Platform/blob/main/firmware/webui/diagnostic-export.schema.json",
+  "title": "IDM local web UI diagnostic export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "device",
+    "mode",
+    "bridge_state",
+    "bridge_error",
+    "safe_active",
+    "stale",
+    "fault",
+    "output_ready",
+    "effective_humidity",
+    "effective_temperature",
+    "command_source",
+    "command_quality",
+    "output_fault",
+    "output_error",
+    "humidity_dac_code",
+    "temperature_digipot_code",
+    "target_resistance_ohm",
+    "calibration_status",
+    "calibration_version",
+    "calibration_using_factory",
+    "calibration_humidity_code_min",
+    "calibration_humidity_code_max",
+    "calibration_temperature_resistance_min",
+    "calibration_temperature_resistance_max",
+    "calibration_temperature_code_inverted",
+    "mqtt_connected",
+    "api_connected",
+    "uptime_s",
+    "wifi_rssi_dbm"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "device": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "const": "analog_bridge"
+    },
+    "bridge_state": {
+      "type": "string"
+    },
+    "bridge_error": {
+      "type": "string"
+    },
+    "safe_active": {
+      "type": "boolean"
+    },
+    "stale": {
+      "type": "boolean"
+    },
+    "fault": {
+      "type": "boolean"
+    },
+    "output_ready": {
+      "type": "boolean"
+    },
+    "effective_humidity": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "effective_temperature": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": -20,
+      "maximum": 60
+    },
+    "command_source": {
+      "type": "string"
+    },
+    "command_quality": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "output_fault": {
+      "type": "boolean"
+    },
+    "output_error": {
+      "type": "string"
+    },
+    "humidity_dac_code": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 4095
+    },
+    "temperature_digipot_code": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 255
+    },
+    "target_resistance_ohm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 100,
+      "maximum": 50000
+    },
+    "calibration_status": {
+      "type": "string"
+    },
+    "calibration_version": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 2
+    },
+    "calibration_using_factory": {
+      "type": "boolean"
+    },
+    "calibration_humidity_code_min": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4094
+    },
+    "calibration_humidity_code_max": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4095
+    },
+    "calibration_temperature_resistance_min": {
+      "type": "number",
+      "minimum": 100,
+      "exclusiveMaximum": 50000
+    },
+    "calibration_temperature_resistance_max": {
+      "type": "number",
+      "exclusiveMinimum": 100,
+      "maximum": 50000
+    },
+    "calibration_temperature_code_inverted": {
+      "type": "boolean"
+    },
+    "mqtt_connected": {
+      "type": "boolean"
+    },
+    "api_connected": {
+      "type": "boolean"
+    },
+    "uptime_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "wifi_rssi_dbm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "maximum": 0
+    }
+  }
+}

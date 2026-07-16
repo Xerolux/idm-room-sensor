@@ -1,0 +1,22 @@
+# Compile-only fixture proving that the reusable package set remains compatible.
+substitutions:
+  device_name: idm-esphome-package-test
+  friendly_name: IDM ESPHome Package Test
+  mqtt_enabled: "false"
+  mqtt_broker: 192.0.2.1
+  mqtt_port: "1883"
+  mqtt_topic_prefix: idm/idm-esphome-package-test
+
+packages:
+  base: !include packages/base.yaml
+  diagnostics: !include packages/diagnostics.yaml
+  fallback: !include packages/fallback.yaml
+  local_sht45: !include packages/local-sht45.yaml
+  mqtt_transport: !include packages/mqtt.yaml
+  mqtt_diagnostics: !include packages/room-sensor-mqtt.yaml
+  pipe_sensor: !include packages/pipe-sensor.yaml
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino

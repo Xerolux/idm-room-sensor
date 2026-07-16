@@ -2,6 +2,9 @@
 
 > 🚧 Work in progress · experimental · not production validated
 
+The deduplicated execution order and acceptance criteria live in
+[TASKS.md](TASKS.md). This file remains the compact status summary.
+
 ## Architecture
 - [x] Local sensor, bridge and hybrid modes
 - [x] GLT/Modbus-first strategy
@@ -34,6 +37,8 @@
 - [x] MQTT model
 - [x] Climate algorithms
 - [x] Fail-safe state machine
+- [x] Local authenticated web UI and diagnostic export
+- [x] Native ESP-IDF parity target with I/O, NVS, API, watchdog and OTA
 - [ ] Build and flash target hardware
 - [ ] Calibrate analog output
 - [ ] Validate KTY emulation
@@ -43,9 +48,11 @@
 - [x] Sensor fusion examples
 - [x] Critical-room selection
 - [x] Dew-point templates
+- [x] Stale-input detection and conservative fallback
 - [x] Dashboard examples
-- [x] `set_external_climate` design
-- [ ] Merge service into idm-heatpump-hass
+- [x] `set_external_climate` merged into idm-heatpump-hass main
+- [x] Stable-release fallback using validated raw register writes
+- [ ] Publish a tagged idm-heatpump-hass release containing `set_external_climate`
 - [ ] Real-device Modbus write test
 
 ## Documentation

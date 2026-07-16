@@ -1,8 +1,11 @@
 esphome:
   name: ${device_name}
+  friendly_name: ${friendly_name}
 logger:
 api:
 ota:
+  - platform: esphome
 wifi:
   ap:
     ssid: "${device_name} Setup"
+captive_portal:

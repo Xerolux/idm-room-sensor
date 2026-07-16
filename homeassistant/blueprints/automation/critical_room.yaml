@@ -1,13 +1,201 @@
 blueprint:
   name: IDM critical room selector
+  description: >
+    Selects the configured room with the highest calculated dew point. Each
+    room must contain an explicitly paired temperature and humidity sensor.
+    Invalid or stale pairs use conservative fallback values. The selected
+    values are exposed to the configured actions as variables.
   domain: automation
+  author: IDM Smart Climate Platform
+  homeassistant:
+    min_version: "2024.10.0"
   input:
-    humidity_sensors:
-      selector:
-        entity:
-          multiple: true
-          domain: sensor
-trigger:
-  - platform: time_pattern
+    room_inputs:
+      name: Room inputs
+      icon: mdi:home-thermometer-outline
+      description: >
+        Enter a YAML list with `name`, `temperature`, and `humidity` for each
+        room. Temperature and humidity must belong to the same room.
+      input:
+        rooms:
+          name: Paired room sensors
+          description: >
+            Example:
+            `[{"name": "Living", "temperature":
+            "sensor.living_temperature", "humidity":
+            "sensor.living_humidity"}]`
+          selector:
+            object:
+    safety_limits:
+      name: Safety and fallback
+      icon: mdi:shield-alert-outline
+      collapsed: true
+      input:
+        stale_after_minutes:
+          name: Stale after
+          description: Maximum age of either sensor in a room pair.
+          default: 15
+          selector:
+            number:
+              min: 1
+              max: 120
+              step: 1
+              unit_of_measurement: min
+              mode: box
+        fallback_temperature:
+          name: Fallback temperature
+          description: Conservative temperature used for an invalid pair.
+          default: 28
+          selector:
+            number:
+              min: 15
+              max: 30
+              step: 0.5
+              unit_of_measurement: "°C"
+              mode: box
+        fallback_humidity:
+          name: Fallback humidity
+          description: Conservative humidity used for an invalid pair.
+          default: 80
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: box
+    output_actions:
+      name: Output actions
+      icon: mdi:play-circle-outline
+      collapsed: true
+      input:
+        selected_actions:
+          name: Selected-room actions
+          description: >
+            Runs after every evaluation. Available variables:
+            `selected_room_name`, `selected_temperature`,
+            `selected_humidity`, `selected_dew_point`,
+            `selected_uses_fallback`, `any_room_stale`, and
+            `configured_room_count`.
+          default: []
+          selector:
+            action:
+        stale_actions:
+          name: Stale-input actions
+          description: >
+            Runs before the selected-room actions when at least one configured
+            pair is invalid or stale.
+          default: []
+          selector:
+            action:
+
+variables:
+  configured_rooms: !input rooms
+  stale_after_minutes: !input stale_after_minutes
+  fallback_temperature: !input fallback_temperature
+  fallback_humidity: !input fallback_humidity
+
+triggers:
+  - trigger: time_pattern
     minutes: "/1"
-action: []
+  - trigger: homeassistant
+    event: start
+
+actions:
+  - variables:
+      selected_result: >
+        {% set stale_after = stale_after_minutes | float(15) * 60 %}
+        {% set fallback_t = fallback_temperature | float(28) %}
+        {% set fallback_h = clamp(fallback_humidity | float(80), 1, 100) %}
+        {% set ns = namespace(
+          name='fallback (no rooms)',
+          temperature=fallback_t,
+          humidity=fallback_h,
+          dew_point=-99,
+          uses_fallback=true,
+          any_stale=false,
+          configured=0
+        ) %}
+        {% set now_timestamp = as_timestamp(now()) %}
+        {% for room in configured_rooms %}
+          {% set room_name = room.name | default('room ' ~ loop.index, true) %}
+          {% set temperature_entity = room.temperature | default('', true) %}
+          {% set humidity_entity = room.humidity | default('', true) %}
+          {% set temperature_state =
+            expand(temperature_entity) | first | default(none) %}
+          {% set humidity_state =
+            expand(humidity_entity) | first | default(none) %}
+          {% set fresh = false %}
+          {% set ns.configured = ns.configured + 1 %}
+          {% if temperature_state is not none and humidity_state is not none
+                and is_number(temperature_state.state)
+                and is_number(humidity_state.state) %}
+            {% set raw_temperature = temperature_state.state | float %}
+            {% set raw_humidity = humidity_state.state | float %}
+            {% set maximum_age = [
+              now_timestamp
+                - as_timestamp(temperature_state.last_reported, 0),
+              now_timestamp
+                - as_timestamp(humidity_state.last_reported, 0)
+            ] | max %}
+            {% set valid_range = -40 <= raw_temperature <= 80
+                                 and 0 < raw_humidity <= 100 %}
+            {% set fresh = valid_range
+                           and 0 <= maximum_age <= stale_after %}
+          {% endif %}
+          {% if fresh %}
+            {% set temperature = temperature_state.state | float %}
+            {% set humidity = humidity_state.state | float %}
+          {% else %}
+            {% set temperature = fallback_t %}
+            {% set humidity = fallback_h %}
+            {% set ns.any_stale = true %}
+          {% endif %}
+          {% set humidity = clamp(humidity, 1, 100) %}
+          {% set gamma = ((17.62 * temperature) / (243.12 + temperature))
+                         + log(humidity / 100) %}
+          {% set dew_point = (243.12 * gamma) / (17.62 - gamma) %}
+          {% if dew_point > ns.dew_point %}
+            {% set ns.name =
+              room_name if fresh else room_name ~ ' (fallback)' %}
+            {% set ns.temperature = temperature %}
+            {% set ns.humidity = humidity %}
+            {% set ns.dew_point = dew_point %}
+            {% set ns.uses_fallback = not fresh %}
+          {% endif %}
+        {% endfor %}
+        {% if ns.configured == 0 %}
+          {% set gamma = ((17.62 * fallback_t) / (243.12 + fallback_t))
+                         + log(fallback_h / 100) %}
+          {% set ns.dew_point = (243.12 * gamma) / (17.62 - gamma) %}
+          {% set ns.any_stale = true %}
+        {% endif %}
+        {{ {
+          'name': ns.name,
+          'temperature': ns.temperature,
+          'humidity': ns.humidity,
+          'dew_point': ns.dew_point,
+          'uses_fallback': ns.uses_fallback,
+          'any_stale': ns.any_stale,
+          'configured_rooms': ns.configured
+        } | to_json }}
+  - variables:
+      selected_room_name: "{{ (selected_result | from_json).name }}"
+      selected_temperature: >
+        {{ (selected_result | from_json).temperature }}
+      selected_humidity: "{{ (selected_result | from_json).humidity }}"
+      selected_dew_point: "{{ (selected_result | from_json).dew_point }}"
+      selected_uses_fallback: >
+        {{ (selected_result | from_json).uses_fallback }}
+      any_room_stale: "{{ (selected_result | from_json).any_stale }}"
+      configured_room_count: >
+        {{ (selected_result | from_json).configured_rooms }}
+  - choose:
+      - conditions: "{{ any_room_stale }}"
+        sequence: !input stale_actions
+  - choose:
+      - conditions: "{{ true }}"
+        sequence: !input selected_actions
+
+mode: restart
+max_exceeded: silent

@@ -1,0 +1,3 @@
+# Keep firmware builds reproducible. Update only after all manifest entries
+# compile successfully with the replacement version.
+esphome==2026.6.5

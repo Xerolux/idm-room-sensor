@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "implementation": "esphome_web_server_v3",
+  "local_assets": true,
+  "authentication_required": true,
+  "web_ota_enabled": false,
+  "sections": [
+    "status",
+    "commands",
+    "calibration",
+    "safety",
+    "diagnostics"
+  ],
+  "confirmation_timeout_s": 60,
+  "calibration": {
+    "humidity_code_min": {
+      "minimum": 0,
+      "maximum": 4095,
+      "step": 1
+    },
+    "humidity_code_max": {
+      "minimum": 0,
+      "maximum": 4095,
+      "step": 1
+    },
+    "temperature_resistance_min": {
+      "minimum": 100,
+      "maximum": 50000,
+      "step": 10,
+      "unit": "ohm"
+    },
+    "temperature_resistance_max": {
+      "minimum": 100,
+      "maximum": 50000,
+      "step": 10,
+      "unit": "ohm"
+    },
+    "temperature_code_inverted": false,
+    "constraints": [
+      "humidity_code_min < humidity_code_max",
+      "temperature_resistance_min < temperature_resistance_max"
+    ]
+  },
+  "dangerous_actions": [
+    "apply_calibration",
+    "factory_reset_calibration"
+  ],
+  "diagnostic_export": {
+    "path": "/text_sensor/idm_webui_diagnostic_export",
+    "schema": "diagnostic-export.schema.json",
+    "refresh_interval_s": 30
+  }
+}

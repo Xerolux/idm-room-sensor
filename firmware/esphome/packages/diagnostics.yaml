@@ -1,8 +1,11 @@
 sensor:
   - platform: wifi_signal
     name: WiFi RSSI
+    id: idm_wifi_rssi
   - platform: uptime
     name: Uptime
+    id: idm_uptime
 binary_sensor:
   - platform: status
     name: Online
+    id: idm_device_online

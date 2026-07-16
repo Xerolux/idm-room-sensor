@@ -17,6 +17,16 @@ Beiträge sind willkommen, besonders:
 4. Messwerte und Annahmen dokumentieren.
 5. Änderungen an Hardware deutlich als getestet oder ungetestet kennzeichnen.
 
+## Software-Prüfungen
+
+```bash
+python3 -m pip install jinja2 pytest pyyaml
+make check
+```
+
+Der Check validiert YAML/JSON, die Home-Assistant-Vertragsbestandteile,
+Taupunktberechnung und die `set_external_climate`-Referenztests.
+
 ## Sicherheit
 
 Keine Änderung als produktionsreif bezeichnen, solange sie nicht auf echter Hardware getestet und dokumentiert wurde.

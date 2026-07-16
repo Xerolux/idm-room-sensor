@@ -1,0 +1,45 @@
+# MQTT is compiled in but disabled by default. Override the substitutions in
+# the device entry point after configuring a real broker.
+mqtt:
+  id: idm_mqtt_client
+  broker: ${mqtt_broker}
+  port: ${mqtt_port}
+  enable_on_boot: ${mqtt_enabled}
+  topic_prefix: ${mqtt_topic_prefix}
+  # Do not queue climate commands while the device is offline. Discovery and
+  # state replay are provided by retained publishes instead.
+  clean_session: true
+  discovery: true
+  discovery_retain: true
+  discovery_prefix: homeassistant
+  discovery_unique_id_generator: mac
+  discovery_object_id_generator: device_name
+  discover_ip: true
+  birth_message:
+    topic: ${mqtt_topic_prefix}/availability
+    payload: online
+    qos: 1
+    retain: true
+  will_message:
+    topic: ${mqtt_topic_prefix}/availability
+    payload: offline
+    qos: 1
+    retain: true
+  shutdown_message:
+    topic: ${mqtt_topic_prefix}/availability
+    payload: offline
+    qos: 1
+    retain: true
+  log_topic: null
+  keepalive: 30s
+  reboot_timeout: 0s
+  publish_nan_as_none: true
+  wait_for_connection: false
+  on_connect:
+    then:
+      - script.execute: publish_idm_mqtt_diagnostics
+
+interval:
+  - interval: 30s
+    then:
+      - script.execute: publish_idm_mqtt_diagnostics

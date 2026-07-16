@@ -5,5 +5,7 @@ sensor:
   - platform: sht4x
     temperature:
       name: Local Temperature
+      id: idm_room_temperature
     humidity:
       name: Local Humidity
+      id: idm_room_humidity
