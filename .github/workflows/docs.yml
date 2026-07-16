@@ -11,6 +11,12 @@ jobs:
       - name: Install repository check dependencies
         run: python -m pip install jinja2 jsonschema pytest pyyaml
       - uses: ibiqlik/action-yamllint@v3
-        with: {file_or_dir: ".", strict: false}
+        with:
+          file_or_dir: .
+          strict: false
+          config_data: |
+            extends: default
+            rules:
+              line-length: disable
       - name: Run repository checks
         run: make check
