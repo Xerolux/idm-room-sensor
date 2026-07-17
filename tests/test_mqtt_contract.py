@@ -125,10 +125,11 @@ def test_mqtt_transport_requires_credentials() -> None:
     config = yaml.safe_load(MQTT_PACKAGE.read_text(encoding="utf-8"))["mqtt"]
     assert config["username"] == "${mqtt_username}"
     assert config["password"] == "${mqtt_password}"
-    # discover_ip (not the misspelled discover_ip) is the documented ESPHome
-    # option; the typo was silently ignored before this contract existed.
-    assert "discover_ip" not in config
-    assert config["discovery_ip"] is True
+    # The ESPHome MQTT schema (verified against 2026.6.5 in CI) names this
+    # option `discover_ip`. An earlier revision mistook it for a typo of
+    # `discovery_ip`, which ESPHome rejects as unknown — keep the canonical
+    # spelling the installed ESPHome release expects.
+    assert config["discover_ip"] is True
 
 
 def test_device_entry_points_ship_credential_placeholders() -> None:

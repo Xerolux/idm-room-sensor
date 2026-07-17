@@ -25,7 +25,11 @@ mqtt:
   discovery_prefix: homeassistant
   discovery_unique_id_generator: mac
   discovery_object_id_generator: device_name
-  discovery_ip: true
+  # NOTE: the ESPHome MQTT schema (verified against 2026.6.5 in CI) calls this
+  # option `discover_ip`, NOT `discovery_ip`. An earlier revision "corrected"
+  # it to discovery_ip, which ESPHome rejects as an unknown option. Keep the
+  # spelling exactly as the installed ESPHome release expects it.
+  discover_ip: true
   birth_message:
     topic: ${mqtt_topic_prefix}/availability
     payload: online
