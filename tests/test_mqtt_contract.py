@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 import re
 
+import pytest
 import yaml
+from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,9 +19,14 @@ SCHEMA_DIRECTORY = ROOT / "firmware/mqtt"
 
 
 def load_schema(filename: str) -> dict:
-    return json.loads(
+    schema = json.loads(
         (SCHEMA_DIRECTORY / filename).read_text(encoding="utf-8")
     )
+    # Every shipped MQTT schema must itself be a valid JSON Schema document;
+    # a malformed schema file used to pass silently because the tests only
+    # inspected keys by hand.
+    Draft202012Validator.check_schema(schema)
+    return schema
 
 
 def payload_fields(package: Path) -> set[str]:
@@ -175,6 +182,70 @@ def test_credential_placeholder_gate_rejects_sentinels() -> None:
     finally:
         if fixture_abs.exists():
             fixture_abs.unlink()
+
+
+def test_representative_payloads_validate_against_their_schemas() -> None:
+    # Validate at least one well-formed sample payload against each MQTT JSON
+    # schema, and confirm a malformed payload is rejected. This catches schema
+    # drift that hand-written structural assertions miss.
+    command_schema = load_schema("climate-command.schema.json")
+    valid_command = {
+        "humidity": 62.5,
+        "temperature": 22.4,
+        "source": "home_assistant",
+        "quality": 95,
+    }
+    Draft202012Validator(command_schema).validate(valid_command)
+    invalid_command = dict(valid_command, humidity=150.0)
+    with pytest.raises(Exception):
+        Draft202012Validator(command_schema).validate(invalid_command)
+
+    # The diagnostics schemas describe the device-authored payloads; validate a
+    # minimal-but-complete sample against each.
+    for schema_name, sample in (
+        (
+            "bridge-diagnostics.schema.json",
+            {
+                "schema_version": 1,
+                "device": "idm-fake-sensor",
+                "mode": "analog_bridge",
+                "bridge_state": "active",
+                "bridge_error": "none",
+                "safe_active": False,
+                "stale": False,
+                "fault": False,
+                "output_ready": True,
+                "effective_humidity": 55.0,
+                "effective_temperature": 23.0,
+                "command_source": "home_assistant",
+                "command_quality": 95,
+                "output_fault": False,
+                "output_error": "none",
+                "humidity_dac_code": 2253,
+                "temperature_digipot_code": 128,
+                "target_resistance_ohm": 1420.0,
+                "calibration_status": "stored_v2",
+                "calibration_version": 2,
+                "calibration_using_factory": False,
+                "uptime_s": 3600,
+            },
+        ),
+        (
+            "room-diagnostics.schema.json",
+            {
+                "schema_version": 1,
+                "device": "idm-room-sensor",
+                "mode": "room_sensor",
+                "online": True,
+                "temperature": 21.5,
+                "humidity": 57.0,
+                "wifi_rssi": -58,
+                "uptime_s": 3600,
+            },
+        ),
+    ):
+        schema = load_schema(schema_name)
+        Draft202012Validator(schema).validate(sample)
 
 
 def test_bridge_command_topics_are_deterministic_and_not_retained() -> None:

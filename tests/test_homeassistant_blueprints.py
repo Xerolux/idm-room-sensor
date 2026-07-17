@@ -150,6 +150,19 @@ def test_cooling_inhibit_has_stale_interlock_and_hysteresis_guard():
     assert "Recovery threshold must be above the inhibit threshold" in actions_yaml
 
 
+def test_cooling_inhibit_default_thresholds_are_safe_and_ordered():
+    blueprint = load_blueprint("cooling_inhibit.yaml")
+    inputs = blueprint["blueprint"]["input"]
+
+    inhibit_default = inputs["inhibit_below"]["default"]
+    clear_default = inputs["clear_above"]["default"]
+    # Defaults must provide hysteresis: clear strictly above inhibit.
+    assert clear_default > inhibit_default
+    # The inhibit default must be a small positive margin (cooling unsafe when
+    # the dew-point margin is only a couple of kelvin).
+    assert 0 < inhibit_default <= 5
+
+
 def test_fake_sensor_automation_selects_by_dew_point_and_fails_closed():
     import yaml
 

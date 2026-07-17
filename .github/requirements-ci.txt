@@ -1,0 +1,6 @@
+# Pinned Python dependencies for the docs / repository-check CI jobs.
+# firmware/requirements.txt pins the ESPHome toolchain separately (esphome).
+jinja2==3.1.6
+jsonschema==4.23.0
+pytest==8.3.4
+pyyaml==6.0.2

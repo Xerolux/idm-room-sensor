@@ -51,13 +51,13 @@ def main() -> None:
         errors.append("Missing required paths: " + ", ".join(missing))
 
     readme = Path("README.md").read_text(encoding="utf-8")
-    normalized_readme = readme.lower()
+    # Safety warnings are pinned to stable HTML comment sentinels rather than
+    # natural-language substrings, so a prose rewrite that preserves the safety
+    # meaning does not break CI. The visible CAUTION block carries the human
+    # wording; these sentinels are the machine-readable contract.
     warning_checks = {
-        "work in progress": (
-            "work in progress" in normalized_readme
-            or "work%20in%20progress" in normalized_readme
-        ),
-        "not production": "not production" in normalized_readme,
+        "work in progress": "<!-- SAFETY:WORK_IN_PROGRESS -->" in readme,
+        "not production": "<!-- SAFETY:NOT_PRODUCTION -->" in readme,
     }
     for warning, present in warning_checks.items():
         if not present:

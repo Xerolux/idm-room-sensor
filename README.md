@@ -16,6 +16,8 @@
 > **Experimental developer edition. Not production-ready and not validated on a real IDM installation.**  
 > Do not connect unverified hardware to a heat pump. Independent condensation protection remains mandatory for cooling tests.
 
+<!-- SAFETY:NOT_PRODUCTION --><!-- SAFETY:WORK_IN_PROGRESS -->
+
 ## What this project contains
 
 The platform combines three hardware approaches and a software-first GLT bridge:

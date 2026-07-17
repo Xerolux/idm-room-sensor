@@ -35,7 +35,9 @@ python3 -m venv .venv-esphome
 .venv-esphome/bin/python tools/check_esphome.py
 ```
 
-Compile every target and the reusable-package fixture:
+`check_esphome.py` without `--compile` validates configuration **syntax**
+(`esphome config`) and runs the fail-closed credential gate. It does not
+compile. To actually compile every target and the reusable-package fixture:
 
 ```bash
 .venv-esphome/bin/python tools/check_esphome.py --compile
