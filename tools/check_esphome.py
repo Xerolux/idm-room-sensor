@@ -30,6 +30,20 @@ CREDENTIAL_PLACEHOLDERS = (
     "idm-mqtt-CHANGE-ME",
     "CHANGE-ME-BEFORE-INSTALLATION",
 )
+# Device entry points that ship credential placeholders and therefore need a
+# synthetic override in CI to prove they still compile. package-test.yaml is
+# excluded because it already uses non-sentinel test values.
+DEVICE_ENTRY_POINTS = (
+    "firmware/esp-sensor-esphome.yaml",
+    "firmware/fake-sensor-bridge.yaml",
+    "firmware/fake-sensor-esphome.yaml",
+)
+# Non-secret synthetic values used only by the CI compile proof. These never
+# reach a real device: they live in a throwaway working copy that is removed
+# after the run, and the committed files keep their fail-closed placeholders.
+CI_TEST_USERNAME = "idm-ci-compile-user"
+CI_TEST_PASSWORD = "idm-ci-compile-password"
+CI_TEST_WEB_PASSWORD = "idm-ci-compile-web-password"
 
 
 def expected_version() -> str:
@@ -103,16 +117,62 @@ def validate(configuration: str) -> None:
     print(f"Validated: {configuration}")
 
 
-def compile_configuration(configuration: str) -> None:
-    print(f"Compiling: {configuration}", flush=True)
+def ci_override_path(configuration: str) -> Path:
+    """Location of the throwaway CI working copy for a device entry point.
+
+    The copy lives next to the original so ESPHome resolves relative
+    `!include` paths exactly as in production. Files are removed after use.
+    """
+    original = ROOT / configuration
+    return original.with_name(original.stem + ".ci-compile.yaml")
+
+
+def materialize_ci_override(configuration: str) -> Path:
+    """Write a throwaway copy of a device entry point with synthetic CI creds.
+
+    Only used when --ci is passed (CI compile proof). The committed file keeps
+    its fail-closed placeholders; this copy substitutes non-secret test values
+    so ESPHome can compile the target without weakening the production gate.
+    """
+    source = (ROOT / configuration).read_text(encoding="utf-8")
+    source = source.replace("idm-mqtt-CHANGE-ME", CI_TEST_USERNAME)
+    source = source.replace(
+        "CHANGE-ME-BEFORE-INSTALLATION", CI_TEST_WEB_PASSWORD
+    )
+    # Guard: the copy must contain no remaining sentinel afterwards.
+    for placeholder in CREDENTIAL_PLACEHOLDERS:
+        if placeholder in source:
+            raise SystemExit(
+                f"CI override for {configuration} still contains {placeholder}; "
+                f"this is a generator bug."
+            )
+    override = ci_override_path(configuration)
+    override.write_text(source, encoding="utf-8")
+    return override
+
+
+def compile_configuration(configuration: str, *, ci: bool) -> None:
+    target = configuration
+    cleanup: Path | None = None
+    if ci and configuration in DEVICE_ENTRY_POINTS:
+        # The committed device entry point carries fail-closed placeholders
+        # by design. To prove it still compiles, build a throwaway copy with
+        # non-secret synthetic credentials that never reach a real device.
+        cleanup = materialize_ci_override(configuration)
+        target = str(cleanup.relative_to(ROOT))
+    print(f"Compiling: {target}", flush=True)
     environment = os.environ.copy()
     environment.setdefault("ESPHOME_DATA_DIR", str(BUILD_DATA_DIR))
-    subprocess.run(
-        [sys.executable, "-m", "esphome", "compile", configuration],
-        cwd=ROOT,
-        env=environment,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "esphome", "compile", target],
+            cwd=ROOT,
+            env=environment,
+            check=True,
+        )
+    finally:
+        if cleanup is not None and cleanup.exists():
+            cleanup.unlink()
 
 
 def main() -> None:
@@ -122,14 +182,26 @@ def main() -> None:
         action="store_true",
         help="Compile all targets after validating them.",
     )
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help=(
+            "CI compile proof: substitute non-secret synthetic credentials "
+            "into device entry points so they can be compiled without "
+            "weakening the production fail-closed gate."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.ci and not args.compile:
+        raise SystemExit("--ci only makes sense together with --compile")
 
     check_version()
     for configuration in CONFIGURATIONS:
         validate(configuration)
     if args.compile:
         for configuration in CONFIGURATIONS:
-            compile_configuration(configuration)
+            compile_configuration(configuration, ci=args.ci)
 
 
 if __name__ == "__main__":

@@ -184,6 +184,46 @@ def test_credential_placeholder_gate_rejects_sentinels() -> None:
             fixture_abs.unlink()
 
 
+def test_ci_compile_override_substitutes_credentials() -> None:
+    # The CI compile proof (--ci) must produce a throwaway copy of every device
+    # entry point with synthetic non-secret credentials and leave NO sentinel
+    # behind, while the committed file keeps its fail-closed placeholders.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_esphome", ROOT / "tools/check_esphome.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for entry_point in module.DEVICE_ENTRY_POINTS:
+        override = module.materialize_ci_override(entry_point)
+        try:
+            text = override.read_text(encoding="utf-8")
+            for placeholder in module.CREDENTIAL_PLACEHOLDERS:
+                assert placeholder not in text, (
+                    f"CI override for {entry_point} still contains {placeholder}"
+                )
+            assert module.CI_TEST_USERNAME in text
+            # Only the bridge/fake-sensor devices expose the local web UI;
+            # the pure room sensor (esp-sensor-esphome.yaml) has no
+            # web_password substitution, so its override has none either.
+            if not entry_point.endswith("esp-sensor-esphome.yaml"):
+                assert module.CI_TEST_WEB_PASSWORD in text
+        finally:
+            if override.exists():
+                override.unlink()
+
+    # The committed entry points must still carry the fail-closed placeholders.
+    for entry_point in module.DEVICE_ENTRY_POINTS:
+        committed = (ROOT / entry_point).read_text(encoding="utf-8")
+        assert "idm-mqtt-CHANGE-ME" in committed
+        # The pure room sensor (esp-sensor-esphome.yaml) has no web UI and
+        # therefore no web_password substitution to gate.
+        if not entry_point.endswith("esp-sensor-esphome.yaml"):
+            assert "CHANGE-ME-BEFORE-INSTALLATION" in committed
+
+
 def test_representative_payloads_validate_against_their_schemas() -> None:
     # Validate at least one well-formed sample payload against each MQTT JSON
     # schema, and confirm a malformed payload is rejected. This catches schema
