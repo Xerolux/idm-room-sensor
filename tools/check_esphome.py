@@ -97,12 +97,32 @@ def check_credential_placeholders(configuration: str) -> None:
         )
 
 
-def validate(configuration: str) -> None:
+def validate(configuration: str, *, ci: bool = False) -> None:
+    # In CI mode, device entry points carry fail-closed placeholders by
+    # design. Validate a throwaway copy with synthetic credentials instead,
+    # so the syntax/structure is checked without weakening the production
+    # gate. The committed file is not validated with credentials here.
+    if ci and configuration in DEVICE_ENTRY_POINTS:
+        override = materialize_ci_override(configuration)
+        try:
+            check_credential_placeholders(str(override.relative_to(ROOT)))
+            _run_esphome("config", str(override.relative_to(ROOT)))
+        finally:
+            if override.exists():
+                override.unlink()
+        print(f"Validated (CI override): {configuration}")
+        return
+
     check_credential_placeholders(configuration)
+    _run_esphome("config", configuration)
+    print(f"Validated: {configuration}")
+
+
+def _run_esphome(command: str, target: str) -> None:
     environment = os.environ.copy()
     environment.setdefault("ESPHOME_DATA_DIR", str(BUILD_DATA_DIR))
     result = subprocess.run(
-        [sys.executable, "-m", "esphome", "config", configuration],
+        [sys.executable, "-m", "esphome", command, target],
         cwd=ROOT,
         env=environment,
         capture_output=True,
@@ -112,9 +132,8 @@ def validate(configuration: str) -> None:
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
         raise SystemExit(
-            f"ESPHome configuration validation failed: {configuration}"
+            f"ESPHome {command} failed for: {target}"
         )
-    print(f"Validated: {configuration}")
 
 
 def ci_override_path(configuration: str) -> Path:
@@ -130,9 +149,10 @@ def ci_override_path(configuration: str) -> Path:
 def materialize_ci_override(configuration: str) -> Path:
     """Write a throwaway copy of a device entry point with synthetic CI creds.
 
-    Only used when --ci is passed (CI compile proof). The committed file keeps
-    its fail-closed placeholders; this copy substitutes non-secret test values
-    so ESPHome can compile the target without weakening the production gate.
+    Only used when --ci is passed (CI validate/compile proof). The committed
+    file keeps its fail-closed placeholders; this copy substitutes non-secret
+    test values so ESPHome can process the target without weakening the
+    production gate.
     """
     source = (ROOT / configuration).read_text(encoding="utf-8")
     source = source.replace("idm-mqtt-CHANGE-ME", CI_TEST_USERNAME)
@@ -161,15 +181,8 @@ def compile_configuration(configuration: str, *, ci: bool) -> None:
         cleanup = materialize_ci_override(configuration)
         target = str(cleanup.relative_to(ROOT))
     print(f"Compiling: {target}", flush=True)
-    environment = os.environ.copy()
-    environment.setdefault("ESPHOME_DATA_DIR", str(BUILD_DATA_DIR))
     try:
-        subprocess.run(
-            [sys.executable, "-m", "esphome", "compile", target],
-            cwd=ROOT,
-            env=environment,
-            check=True,
-        )
+        _run_esphome("compile", target)
     finally:
         if cleanup is not None and cleanup.exists():
             cleanup.unlink()
@@ -186,19 +199,16 @@ def main() -> None:
         "--ci",
         action="store_true",
         help=(
-            "CI compile proof: substitute non-secret synthetic credentials "
-            "into device entry points so they can be compiled without "
-            "weakening the production fail-closed gate."
+            "CI validate/compile proof: substitute non-secret synthetic "
+            "credentials into device entry points so they can be processed "
+            "without weakening the production fail-closed gate."
         ),
     )
     args = parser.parse_args()
 
-    if args.ci and not args.compile:
-        raise SystemExit("--ci only makes sense together with --compile")
-
     check_version()
     for configuration in CONFIGURATIONS:
-        validate(configuration)
+        validate(configuration, ci=args.ci)
     if args.compile:
         for configuration in CONFIGURATIONS:
             compile_configuration(configuration, ci=args.ci)
