@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -277,6 +279,24 @@ def main() -> None:
         description = blueprint.get("blueprint", {}).get("description", "")
         if "placeholder" in description.lower():
             errors.append(f"{blueprint_name} must not remain a placeholder")
+
+    if errors:
+        raise SystemExit("\n".join(errors))
+
+    # FILE_INVENTORY.md must match the generator output exactly. The inventory
+    # used to be hand-maintained and drifted; it is now generated from
+    # `git ls-files` by tools/generate_file_inventory.py. Fail CI if someone
+    # adds/removes/renames a tracked file without rerunning the generator.
+    inventory_result = subprocess.run(
+        [sys.executable, "tools/generate_file_inventory.py", "--check"],
+        capture_output=True,
+        text=True,
+    )
+    if inventory_result.returncode:
+        errors.append(
+            "FILE_INVENTORY.md is out of sync with git ls-files. Regenerate "
+            "with: python3 tools/generate_file_inventory.py"
+        )
 
     if errors:
         raise SystemExit("\n".join(errors))

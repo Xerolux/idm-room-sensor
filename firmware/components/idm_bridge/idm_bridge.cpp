@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2026 Xerolux
+
 #include "idm_bridge.h"
 
 #include "esphome/core/hal.h"

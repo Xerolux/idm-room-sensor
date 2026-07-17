@@ -20,12 +20,14 @@ Beiträge sind willkommen, besonders:
 ## Software-Prüfungen
 
 ```bash
-python3 -m pip install jinja2 pytest pyyaml
+python3 -m pip install jinja2 jsonschema pytest pyyaml
 make check
 ```
 
 Der Check validiert YAML/JSON, die Home-Assistant-Vertragsbestandteile,
-Taupunktberechnung und die `set_external_climate`-Referenztests.
+Taupunktberechnung und die `set_external_climate`-Referenztests. Die
+C++-Core-Tests werden mit `g++ -std=c++17` kompiliert; unter Ubuntu ist
+`build-essential` dafür ausreichend.
 
 ## Sicherheit
 

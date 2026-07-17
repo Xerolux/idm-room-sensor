@@ -128,7 +128,7 @@ Independent pipe dew-point switch / cooling inhibit
 
 ## Quick start for contributors
 
-1. Read [Safety](docs/#/safety) and [Validation Plan](docs/#/validation).
+1. Read [Safety](pages/#/cooling-safety) and [Validation Plan](pages/#/validation).
 2. Choose the next unblocked item from the [prioritized task list](TASKS.md).
 3. Do not mark measurements as verified without raw data and test conditions.
 4. Open an issue using the measurement or hardware-test template.
