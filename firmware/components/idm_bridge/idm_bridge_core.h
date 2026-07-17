@@ -20,6 +20,7 @@ enum class BridgeError : uint8_t {
   INVALID_HUMIDITY,
   INVALID_TEMPERATURE,
   INVALID_VALUES,
+  INVALID_QUALITY,
   OUTPUT_FAILURE,
 };
 
@@ -44,6 +45,16 @@ class IdmBridgeCore {
     this->stale_timeout_ms_ = stale_timeout_ms;
   }
 
+  // Optional command-quality gate mirroring the native runtime. Default 0
+  // preserves the historical ESPHome behaviour (accept any in-range command
+  // regardless of reported quality) so existing deployments are unaffected;
+  // raising it lets an operator reject low-confidence sources the same way
+  // the native firmware does. Clamped to 0..100 because quality is uint8_t.
+  void set_minimum_command_quality(uint8_t minimum) {
+    minimum_command_quality_ =
+        minimum > 100 ? 100 : minimum;
+  }
+
   void reset(uint32_t now_ms) {
     this->effective_ = this->fallback_;
     this->last_command_ms_ = now_ms;
@@ -55,6 +66,11 @@ class IdmBridgeCore {
   }
 
   bool set_values(float humidity, float temperature, uint32_t now_ms) {
+    return set_values(humidity, temperature, 100, now_ms);
+  }
+
+  bool set_values(float humidity, float temperature,
+                  uint8_t quality, uint32_t now_ms) {
     if (this->output_fault_latched_) {
       this->apply_safe_(BridgeState::OUTPUT_FAULT_SAFE,
                         BridgeError::OUTPUT_FAILURE);
@@ -70,6 +86,16 @@ class IdmBridgeCore {
       if (humidity_valid && !temperature_valid)
         error = BridgeError::INVALID_TEMPERATURE;
       this->apply_safe_(BridgeState::INVALID_SAFE, error);
+      return false;
+    }
+
+    // Quality gate. quality > 100 is treated as invalid (mirrors
+    // value_quality.h). When the gate is 0 (default), every in-range command
+    // is accepted — historical ESPHome behaviour, documented divergence from
+    // the native firmware's default of 50.
+    if (quality > 100 || quality < minimum_command_quality_) {
+      this->apply_safe_(BridgeState::INVALID_SAFE,
+                        BridgeError::INVALID_QUALITY);
       return false;
     }
 
@@ -186,6 +212,8 @@ class IdmBridgeCore {
         return "invalid_temperature";
       case BridgeError::INVALID_VALUES:
         return "invalid_values";
+      case BridgeError::INVALID_QUALITY:
+        return "invalid_quality";
       case BridgeError::OUTPUT_FAILURE:
         return "output_failure";
     }
@@ -210,6 +238,7 @@ class IdmBridgeCore {
   bool has_command_{false};
   bool output_fault_latched_{false};
   bool output_dirty_{true};
+  uint8_t minimum_command_quality_{0};
 };
 
 }  // namespace esphome::idm_bridge

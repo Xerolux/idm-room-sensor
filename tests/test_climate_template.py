@@ -203,3 +203,39 @@ def test_publish_status_only_becomes_ok_after_both_register_writes():
     ]
     assert actions[-1]["action"] == "input_text.set_value"
     assert actions[-1]["data"]["value"] == "ok"
+
+
+def test_highest_dew_point_equivalence_to_smallest_margin_for_shared_pipe():
+    # The climate-engine selects by argmax(dew_point). The documented strategy
+    # is "smallest dew-point margin" (pipe_temperature - dew_point). These are
+    # equivalent ONLY because the implementation uses a single shared pipe/
+    # flow temperature for all rooms, so the pipe term is constant and drops
+    # out of the argmin. This test pins that assumption: if anyone ever wires
+    # per-room pipe sensors, the selection must move to a true per-room argmin
+    # and this test will flag the behavioural change.
+    import random
+
+    def dew_point(t: float, rh: float) -> float:
+        a, b = 17.62, 243.12
+        g = math.log(rh / 100.0) + (a * t) / (b + t)
+        return b * g / (a - g)
+
+    rng = random.Random(20260717)
+    for _ in range(200):
+        rooms = [
+            (
+                rng.uniform(-10, 40),
+                rng.uniform(20, 95),
+            )
+            for _ in range(6)
+        ]
+        dps = [dew_point(t, rh) for t, rh in rooms]
+        argmax_dp = max(range(len(rooms)), key=lambda i: dps[i])
+        for shared_pipe in (5.0, 10.0, 40.0):
+            margins = [shared_pipe - dp for dp in dps]
+            argmin_margin = min(range(len(rooms)), key=lambda i: margins[i])
+            assert argmax_dp == argmin_margin, (
+                "argmax(dew_point) != argmin(margin) — the shared-pipe "
+                "equivalence assumption is broken; selection must switch to "
+                "a per-room margin calculation."
+            )

@@ -352,11 +352,14 @@ void record_output_result(bool success) {
 }
 
 bool apply_outputs_once(uint32_t current_ms) {
+  (void) current_ms;
   NativeOutput output{};
   bool dirty = false;
   {
     RuntimeGuard guard;
-    s_runtime.tick(current_ms);
+    // tick() is driven by the main loop (every 100 ms) so stale-timeout
+    // transitions are detected promptly; do not re-tick here. This function
+    // only reads whether a fresh output write is pending.
     dirty = s_runtime.output_dirty();
     if (dirty)
       output = s_runtime.desired_output();
@@ -977,24 +980,74 @@ esp_err_t start_http_server() {
   return ESP_OK;
 }
 
+// Wi-Fi reconnect backoff state. Without it, a flapping AP or wrong credential
+// makes the disconnect handler call esp_wifi_connect() as fast as events fire,
+// burning CPU and spamming logs. The delay is applied via a one-shot timer so
+// the event handler never blocks.
+uint16_t s_wifi_reconnect_attempt = 0;
+esp_timer_handle_t s_wifi_reconnect_timer = nullptr;
+
+uint32_t wifi_reconnect_delay_ms() {
+  // Exponential backoff capped at 30 s: 0, 1, 2, 4, 8, 16, 30, 30, ...
+  if (s_wifi_reconnect_attempt == 0)
+    return 0;
+  const uint32_t raw = 1U << (s_wifi_reconnect_attempt - 1);
+  return raw > 30000U ? 30000U : raw * 1000U;
+}
+
+void wifi_reconnect_timer_callback(void *argument) {
+  (void) argument;
+  esp_wifi_connect();
+}
+
+void schedule_wifi_reconnect() {
+  const uint32_t delay_ms = wifi_reconnect_delay_ms();
+  if (delay_ms == 0) {
+    esp_wifi_connect();
+    return;
+  }
+  if (s_wifi_reconnect_timer == nullptr) {
+    const esp_timer_create_args_t args{
+        .callback = wifi_reconnect_timer_callback,
+        .arg = nullptr,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "idm_wifi_reconnect",
+    };
+    if (esp_timer_create(&args, &s_wifi_reconnect_timer) != ESP_OK) {
+      esp_wifi_connect();  // fall back to immediate reconnect
+      return;
+    }
+  }
+  esp_timer_start_once(s_wifi_reconnect_timer, delay_ms * 1000U);
+}
+
 void wifi_event_handler(
     void *argument, esp_event_base_t event_base, int32_t event_id,
     void *event_data) {
   (void) argument;
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    s_wifi_reconnect_attempt = 0;
     esp_wifi_connect();
     return;
   }
   if (event_base == WIFI_EVENT &&
       event_id == WIFI_EVENT_STA_DISCONNECTED) {
     s_wifi_connected.store(false);
-    ESP_LOGW(TAG, "Wi-Fi disconnected; retaining local fail-safe control");
-    esp_wifi_connect();
+    s_wifi_reconnect_attempt =
+        s_wifi_reconnect_attempt >= 15 ? 15 : s_wifi_reconnect_attempt + 1;
+    ESP_LOGW(
+        TAG,
+        "Wi-Fi disconnected; retaining local fail-safe control, reconnect "
+        "attempt %u in %lu ms",
+        static_cast<unsigned>(s_wifi_reconnect_attempt),
+        static_cast<unsigned long>(wifi_reconnect_delay_ms()));
+    schedule_wifi_reconnect();
     return;
   }
   if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     auto *event = static_cast<ip_event_got_ip_t *>(event_data);
     s_wifi_connected.store(true);
+    s_wifi_reconnect_attempt = 0;
     ESP_LOGI(TAG, "Wi-Fi connected, address " IPSTR,
              IP2STR(&event->ip_info.ip));
     start_http_server();

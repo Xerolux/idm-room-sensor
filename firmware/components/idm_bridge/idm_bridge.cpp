@@ -107,12 +107,22 @@ void IdmBridge::apply_outputs_() {
   if (this->output_driver_ != nullptr) {
     output_ok =
         this->output_driver_->apply(values.humidity, values.temperature);
-  } else {
+  } else if (this->humidity_output_ != nullptr ||
+             this->temperature_output_ != nullptr) {
+    // Legacy float-output path. set_level() returns void, so a failed write
+    // cannot be detected here. To avoid silently clearing output_dirty and
+    // skipping the retry/fault machinery, only consider the write OK when the
+    // configured output reports ready (e.g. a FloatOutput with a status
+    // method). When no readiness signal exists we conservatively accept the
+    // write, preserving historical behaviour but documenting the gap.
     if (this->humidity_output_ != nullptr)
       this->humidity_output_->set_level(this->core_.normalized_humidity());
     if (this->temperature_output_ != nullptr)
       this->temperature_output_->set_level(
           this->core_.normalized_temperature());
+    output_ok = this->outputs_ready_();
+  } else {
+    output_ok = false;
   }
 
   if (this->output_driver_ != nullptr && !output_ok) {

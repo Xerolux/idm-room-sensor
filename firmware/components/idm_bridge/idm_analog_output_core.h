@@ -24,10 +24,17 @@ inline constexpr KtyPoint KTY81_210_PROTOTYPE_TABLE[] = {
 class IdmAnalogOutputCore {
  public:
   void set_humidity_code_range(uint16_t minimum, uint16_t maximum) {
-    this->calibration_.humidity_code_min =
-        std::min<uint16_t>(minimum, CALIBRATION_HUMIDITY_CODE_MAX);
-    this->calibration_.humidity_code_max =
-        std::min<uint16_t>(maximum, CALIBRATION_HUMIDITY_CODE_MAX);
+    // Clamp both endpoints into the valid DAC range, then enforce min < max.
+    // valid_calibration() (idm_calibration_storage_core.h) requires this
+    // ordering for persisted records; this guard extends it to the factory
+    // range setters used during initial setup, so an inverted range cannot
+    // produce a negative code span in humidity_code() silently.
+    const uint16_t lo = std::min<uint16_t>(minimum, CALIBRATION_HUMIDITY_CODE_MAX);
+    const uint16_t hi = std::min<uint16_t>(maximum, CALIBRATION_HUMIDITY_CODE_MAX);
+    if (lo < hi) {
+      this->calibration_.humidity_code_min = lo;
+      this->calibration_.humidity_code_max = hi;
+    }
   }
 
   void set_temperature_resistance_range(float minimum, float maximum) {
