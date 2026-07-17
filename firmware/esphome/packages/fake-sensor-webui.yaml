@@ -34,20 +34,16 @@ esphome:
         - text_sensor.template.publish:
             id: idm_web_action_status
             state: "ready"
-        # Defense in depth: even if an image is flashed manually and bypasses
-        # the repository credential check, disable the web server at runtime
-        # while the password substitution is still the shipped placeholder.
-        # The pre-compile gate in tools/check_esphome.py is the primary guard;
-        # this lambda catches manually built or stale images.
-        - lambda: |-
-            if (std::string("${web_password}") ==
-                "CHANGE-ME-BEFORE-INSTALLATION") {
-              id(idm_web_server).set_enabled(false);
-              ESP_LOGW("idm_web", "Web server disabled: web_password is still "
-                                  "the shipped placeholder");
-              id(idm_web_action_status)->publish_state(
-                  "web_disabled_placeholder_password");
-            }
+        # SECURITY: the web server is only safe once web_password is overridden
+        # with a real secret. The fail-closed gate is enforced at BUILD time by
+        # tools/check_esphome.py, which refuses to validate or compile any
+        # device entry point whose web_password substitution still equals the
+        # shipped placeholder. An earlier revision tried to add a runtime
+        # lambda here calling WebServer::set_enabled(false), but the ESPHome
+        # WebServer class (verified against 2026.6.5) exposes no such method,
+        # so it failed to compile. The build-time gate is the authoritative
+        # safeguard; do not weaken it by re-adding a runtime workaround unless
+        # a supported ESPHome API for fully disabling the listener exists.
 
 script:
   - id: idm_web_sync_calibration_editor
