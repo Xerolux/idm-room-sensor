@@ -3,6 +3,27 @@
 The supported ESPHome version is pinned in `firmware/requirements.txt`.
 Pre-release versions are intentionally excluded from the supported build.
 
+## Credentials are fail-closed
+
+The device entry points ship placeholder credentials for MQTT
+(`mqtt_username`/`mqtt_password`) and the local web UI (`web_password`). The
+repository check in `tools/check_esphome.py` **refuses to validate** any
+configuration that still carries one of these placeholders, so an accidental
+production build without real secrets cannot happen. Before validating or
+flashing, override the substitutions in the device entry point (or via a
+`secrets.yaml` substitution) with strong, unique values:
+
+```yaml
+substitutions:
+  mqtt_username: your-real-mqtt-user
+  mqtt_password: your-real-mqtt-password
+  web_password: your-real-web-password
+```
+
+As defense in depth, the local web server also disables itself at runtime if
+`web_password` is still the shipped placeholder. See
+[`firmware/mqtt/topics.md`](mqtt/topics.md) for the MQTT threat model.
+
 ## Local validation
 
 Create a virtual environment, install the exact dependency and validate every
@@ -14,7 +35,9 @@ python3 -m venv .venv-esphome
 .venv-esphome/bin/python tools/check_esphome.py
 ```
 
-Compile every target and the reusable-package fixture:
+`check_esphome.py` without `--compile` validates configuration **syntax**
+(`esphome config`) and runs the fail-closed credential gate. It does not
+compile. To actually compile every target and the reusable-package fixture:
 
 ```bash
 .venv-esphome/bin/python tools/check_esphome.py --compile

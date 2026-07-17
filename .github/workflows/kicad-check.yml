@@ -9,11 +9,15 @@ on:
     paths:
       - "hardware/**"
 
+permissions:
+  contents: read
+
 jobs:
   file-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to the commit SHA currently pointed at by actions/checkout@v4.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
       - name: Verify expected project files
         run: |
           set -e

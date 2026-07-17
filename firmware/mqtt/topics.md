@@ -14,16 +14,39 @@ enable it, override the substitutions in the device entry point:
 substitutions:
   mqtt_enabled: "true"
   mqtt_broker: 192.0.2.10
-  mqtt_port: "1883"
+  mqtt_port: "8883"
+  mqtt_username: !secret mqtt_username
+  mqtt_password: !secret mqtt_password
   mqtt_topic_prefix: idm/plant-room-bridge
-
-mqtt:
-  username: !secret mqtt_username
-  password: !secret mqtt_password
 ```
 
 Use a unique prefix for every physical device. Do not put secrets in a tracked
 configuration file.
+
+## Threat model (security)
+
+The MQTT command topics (`<prefix>/command/...`) drive the analog bridge that
+emulates the IDM heat-pump room sensor input, so anyone who can publish to the
+broker can push humidity and temperature values to the heat pump. The default
+configuration therefore **refuses to validate** while credentials are still the
+shipped placeholders (`idm-mqtt-CHANGE-ME`); see the fail-closed gate in
+`tools/check_esphome.py`.
+
+Two deployment tiers are supported:
+
+- **Trusted LAN** — set `mqtt_username` and `mqtt_password` to strong unique
+  values and keep `mqtt_port: "1883"` only if the broker is on an isolated,
+  trusted network segment. Plaintext MQTT without authentication is never
+  acceptable on the command path.
+- **Anything reachable beyond a trusted LAN** — use TLS on port `8883` (the
+  shipped default). For mutual TLS, extend the `mqtt:` block with
+  `certificate_authority`, `client_certificate` and `client_key`, and point
+  `mqtt_broker` at the broker hostname that matches the CA.
+
+The shared `mqtt:` block lives in
+[`firmware/esphome/packages/mqtt.yaml`](../esphome/packages/mqtt.yaml). The
+connection cannot reboot the controller (`reboot_timeout: 0s`), so a broker or
+network outage never interrupts the local fail-safe state machine.
 
 ## Delivery rules
 

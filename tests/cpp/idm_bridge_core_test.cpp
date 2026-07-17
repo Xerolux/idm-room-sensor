@@ -114,6 +114,44 @@ int main() {
              BridgeState::OUTPUT_FAULT_SAFE)) == "output_fault_safe");
   assert(std::string(IdmBridgeCore::error_name(
              BridgeError::INVALID_VALUES)) == "invalid_values");
+  assert(std::string(IdmBridgeCore::error_name(
+             BridgeError::INVALID_QUALITY)) == "invalid_quality");
+
+  // Command-quality gate. Default minimum is 0, so any in-range command is
+  // accepted regardless of quality (historical ESPHome behaviour, documented
+  // divergence from the native firmware's default of 50).
+  IdmBridgeCore quality_default;
+  quality_default.configure(80.0f, 28.0f, 1000);
+  quality_default.reset(0);
+  assert(quality_default.set_values(50.0f, 20.0f, /*quality=*/0, 1));
+  assert(quality_default.state() == BridgeState::ACTIVE);
+
+  // Raising the gate rejects commands below the minimum.
+  IdmBridgeCore quality_gated;
+  quality_gated.configure(80.0f, 28.0f, 1000);
+  quality_gated.set_minimum_command_quality(50);
+  quality_gated.reset(0);
+  assert(!quality_gated.set_values(50.0f, 20.0f, /*quality=*/49, 1));
+  assert(quality_gated.state() == BridgeState::INVALID_SAFE);
+  assert(quality_gated.error() == BridgeError::INVALID_QUALITY);
+  assert(quality_gated.set_values(50.0f, 20.0f, /*quality=*/50, 2));
+  assert(quality_gated.state() == BridgeState::ACTIVE);
+
+  // quality > 100 is always invalid regardless of the gate.
+  IdmBridgeCore quality_overflow;
+  quality_overflow.configure(80.0f, 28.0f, 1000);
+  quality_overflow.reset(0);
+  assert(!quality_overflow.set_values(50.0f, 20.0f, /*quality=*/101, 1));
+  assert(quality_overflow.error() == BridgeError::INVALID_QUALITY);
+
+  // The gate is clamped to 0..100; a misconfigured high minimum cannot reject
+  // every command silently.
+  IdmBridgeCore quality_clamped;
+  quality_clamped.configure(80.0f, 28.0f, 1000);
+  quality_clamped.set_minimum_command_quality(200);
+  quality_clamped.reset(0);
+  assert(quality_clamped.set_values(50.0f, 20.0f, /*quality=*/100, 1));
+  assert(quality_clamped.state() == BridgeState::ACTIVE);
 
   return 0;
 }

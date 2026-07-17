@@ -5,17 +5,23 @@ on:
     paths:
       - "**/*.yaml"
       - "**/*.yml"
+      - ".github/workflows/yaml-check.yml"
   pull_request:
     paths:
       - "**/*.yaml"
       - "**/*.yml"
 
+permissions:
+  contents: read
+
 jobs:
   yamllint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: ibiqlik/action-yamllint@v3
+      # Pinned to the commit SHA currently pointed at by actions/checkout@v4.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      # Pinned to the commit SHA currently pointed at by ibiqlik/action-yamllint@v3.
+      - uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c  # v3
         with:
           file_or_dir: .
           strict: false

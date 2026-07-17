@@ -125,6 +125,66 @@ def test_all_blueprints_have_executable_actions():
         assert "placeholder" not in blueprint["blueprint"]["description"].lower()
 
 
+def test_cooling_inhibit_has_stale_interlock_and_hysteresis_guard():
+    blueprint = load_blueprint("cooling_inhibit.yaml")
+    trigger_ids = [trigger["id"] for trigger in blueprint["triggers"]]
+
+    # The margin sensor must be monitored for unavailable/unknown transitions
+    # so a stuck sensor cannot leave the inhibit/clear state frozen. Both
+    # unavailable transitions share the id "unavailable" so they route to the
+    # inhibit (safe) branch.
+    assert "inhibit" in trigger_ids
+    assert "clear" in trigger_ids
+    assert trigger_ids.count("unavailable") == 2
+    unavailable_targets = {
+        trigger["to"] for trigger in blueprint["triggers"]
+        if trigger["id"] == "unavailable"
+    }
+    assert unavailable_targets == {"unavailable", "unknown"}
+
+    # The hysteresis guard must refuse a configuration where the recovery
+    # threshold is not above the inhibit threshold, rather than letting both
+    # numeric_state triggers flap.
+    actions_yaml = json.dumps(blueprint["actions"])
+    assert "z_clear_above <= z_inhibit_below" in actions_yaml
+    assert "Recovery threshold must be above the inhibit threshold" in actions_yaml
+
+
+def test_cooling_inhibit_default_thresholds_are_safe_and_ordered():
+    blueprint = load_blueprint("cooling_inhibit.yaml")
+    inputs = blueprint["blueprint"]["input"]
+
+    inhibit_default = inputs["inhibit_below"]["default"]
+    clear_default = inputs["clear_above"]["default"]
+    # Defaults must provide hysteresis: clear strictly above inhibit.
+    assert clear_default > inhibit_default
+    # The inhibit default must be a small positive margin (cooling unsafe when
+    # the dew-point margin is only a couple of kelvin).
+    assert 0 < inhibit_default <= 5
+
+
+def test_fake_sensor_automation_selects_by_dew_point_and_fails_closed():
+    import yaml
+
+    source = Path(
+        "homeassistant/fake-sensor-automation.yaml"
+    ).read_text(encoding="utf-8")
+    automation = yaml.safe_load(source)
+
+    # Modern triggers/actions syntax (not the deprecated trigger:/service:).
+    assert "triggers" in automation
+    assert "actions" in automation or "action" in automation
+
+    # Selection must compute a dew point (Magnus constants), not sort by raw
+    # relative humidity. The previous implementation sorted by attribute 0
+    # (humidity), which contradicts the documented critical-margin strategy.
+    assert "sort(attribute='dp'" in source or 'sort(attribute="dp"' in source
+    assert "17.62" in source and "243.12" in source
+    # Fail-closed: when no room has usable numeric data, the automation must
+    # NOT publish synthetic fallback values to the bridge.
+    assert "worst is not none" in source
+
+
 def test_critical_room_selects_highest_dew_point():
     result = render_critical_room()
 

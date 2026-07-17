@@ -1,9 +1,20 @@
 # MQTT is compiled in but disabled by default. Override the substitutions in
 # the device entry point after configuring a real broker.
+#
+# SECURITY (fail-closed): the device entry points ship placeholder credentials
+# (mqtt_username / mqtt_password / web_password). The repository check in
+# tools/check_esphome.py refuses to validate a configuration that still carries
+# those placeholders, so an accidental production build without real credentials
+# cannot happen. For deployments that accept plaintext MQTT on a trusted LAN,
+# set mqtt_username and mqtt_password. For anything reachable beyond a trusted
+# LAN, switch mqtt_port to 8883 and provide certificate_authority plus
+# client_certificate/client_key (mTLS) — see firmware/mqtt/topics.md.
 mqtt:
   id: idm_mqtt_client
   broker: ${mqtt_broker}
   port: ${mqtt_port}
+  username: ${mqtt_username}
+  password: ${mqtt_password}
   enable_on_boot: ${mqtt_enabled}
   topic_prefix: ${mqtt_topic_prefix}
   # Do not queue climate commands while the device is offline. Discovery and
@@ -14,7 +25,7 @@ mqtt:
   discovery_prefix: homeassistant
   discovery_unique_id_generator: mac
   discovery_object_id_generator: device_name
-  discover_ip: true
+  discovery_ip: true
   birth_message:
     topic: ${mqtt_topic_prefix}/availability
     payload: online

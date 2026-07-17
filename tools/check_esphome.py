@@ -22,6 +22,14 @@ CONFIGURATIONS = (
     "hardware/esp-sensor/firmware/esphome.yaml",
     "hardware/fake-sensor/firmware/esphome.yaml",
 )
+# Sentinel credential placeholders. A configuration that resolves to one of
+# these values is rejected before validation so an accidental production build
+# without real credentials cannot happen. The compile fixture package-test.yaml
+# deliberately uses non-sentinel test values to stay compilable.
+CREDENTIAL_PLACEHOLDERS = (
+    "idm-mqtt-CHANGE-ME",
+    "CHANGE-ME-BEFORE-INSTALLATION",
+)
 
 
 def expected_version() -> str:
@@ -52,7 +60,31 @@ def check_version() -> None:
     print(f"ESPHome version: {actual}")
 
 
+def check_credential_placeholders(configuration: str) -> None:
+    """Reject configurations that still carry credential placeholders.
+
+    A device entry point must override the placeholder substitution values
+    (mqtt_username, mqtt_password, web_password) before it may be validated.
+    This is the fail-closed gate for the MQTT and web UI control paths; it
+    complements the runtime checks documented in firmware/BUILDING.md.
+    """
+    source = (ROOT / configuration).read_text(encoding="utf-8")
+    offenders = [
+        placeholder
+        for placeholder in CREDENTIAL_PLACEHOLDERS
+        if placeholder in source
+    ]
+    if offenders:
+        raise SystemExit(
+            f"{configuration} still carries placeholder credential(s): "
+            f"{', '.join(offenders)}. Override the substitution values "
+            f"(mqtt_username, mqtt_password, web_password) with real secrets "
+            f"before validation."
+        )
+
+
 def validate(configuration: str) -> None:
+    check_credential_placeholders(configuration)
     environment = os.environ.copy()
     environment.setdefault("ESPHOME_DATA_DIR", str(BUILD_DATA_DIR))
     result = subprocess.run(

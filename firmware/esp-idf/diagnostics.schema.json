@@ -40,6 +40,9 @@
     "uptime_s",
     "free_heap_bytes"
   ],
+  "optional": [
+    "redacted"
+  ],
   "properties": {
     "schema_version": {
       "const": 1
@@ -209,6 +212,10 @@
     "free_heap_bytes": {
       "type": "integer",
       "minimum": 0
+    },
+    "redacted": {
+      "type": "boolean",
+      "description": "Present and true only when the endpoint answered without an API token and sensor fields were redacted."
     }
   }
 }

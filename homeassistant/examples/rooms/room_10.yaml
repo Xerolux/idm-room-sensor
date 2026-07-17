@@ -1,7 +1,15 @@
 template:
   - sensor:
       - name: "Room 10 Dew Point"
+        unique_id: idm_room_10_dew_point
         unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:water-thermometer
+        availability: >
+          {% set t = states('sensor.room_10_temperature') | float(none) %}
+          {% set rh = states('sensor.room_10_humidity') | float(none) %}
+          {{ t is not none and rh is not none and rh > 0 and rh <= 100 }}
         state: >
           {% set t = states('sensor.room_10_temperature') | float(none) %}
           {% set rh = states('sensor.room_10_humidity') | float(none) %}

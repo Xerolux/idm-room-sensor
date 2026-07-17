@@ -1,36 +1,78 @@
-alias: IDM Fake Sensor aus mehreren Räumen
+alias: IDM Fake Sensor aus mehreren Räumen (Taupunkt-Auswahl)
+description: >
+  Selects the room with the highest dew point (most critical for condensation)
+  and forwards its temperature and humidity to the fake-sensor number entities
+  that drive the analog IDM bridge. Selection by dew point is required because
+  a warmer room with lower relative humidity can still have the higher dew
+  point — selecting by relative humidity alone is unsafe and contradicts the
+  documented strategy in docs/home-assistant/strategy-critical-margin.md.
+  Modern triggers/actions syntax; override the entity_id list below.
 mode: restart
-trigger:
-  - platform: state
+triggers:
+  - trigger: state
+    id: room_update
     entity_id:
       - sensor.wohnzimmer_luftfeuchtigkeit
-      - sensor.schlafzimmer_luftfeuchtigkeit
-      - sensor.buero_luftfeuchtigkeit
       - sensor.wohnzimmer_temperatur
+      - sensor.schlafzimmer_luftfeuchtigkeit
       - sensor.schlafzimmer_temperatur
+      - sensor.buero_luftfeuchtigkeit
       - sensor.buero_temperatur
-action:
+actions:
   - variables:
-      max_rh: >
+      rooms: >
         {{ [
-          states('sensor.wohnzimmer_luftfeuchtigkeit')|float(80),
-          states('sensor.schlafzimmer_luftfeuchtigkeit')|float(80),
-          states('sensor.buero_luftfeuchtigkeit')|float(80)
-        ] | max }}
-      temp_for_worst_room: >
-        {% set rooms = [
-          (states('sensor.wohnzimmer_luftfeuchtigkeit')|float(80), states('sensor.wohnzimmer_temperatur')|float(28)),
-          (states('sensor.schlafzimmer_luftfeuchtigkeit')|float(80), states('sensor.schlafzimmer_temperatur')|float(28)),
-          (states('sensor.buero_luftfeuchtigkeit')|float(80), states('sensor.buero_temperatur')|float(28))
-        ] %}
-        {{ (rooms | sort(attribute=0, reverse=true) | first)[1] }}
-  - service: number.set_value
-    target:
-      entity_id: number.idm_simulated_humidity
-    data:
-      value: "{{ max_rh }}"
-  - service: number.set_value
-    target:
-      entity_id: number.idm_simulated_temperature
-    data:
-      value: "{{ temp_for_worst_room }}"
+          {'name': 'wohnzimmer',
+            'rh': states('sensor.wohnzimmer_luftfeuchtigkeit') | float(none),
+            't': states('sensor.wohnzimmer_temperatur') | float(none)},
+          {'name': 'schlafzimmer',
+            'rh': states('sensor.schlafzimmer_luftfeuchtigkeit') | float(none),
+            't': states('sensor.schlafzimmer_temperatur') | float(none)},
+          {'name': 'buero',
+            'rh': states('sensor.buero_luftfeuchtigkeit') | float(none),
+            't': states('sensor.buero_temperatur') | float(none)}
+        ] }}
+      # Dew point via Magnus formula, matching firmware/common/dew_point.h and
+      # the room_*.yaml templates. Non-numeric sources yield no dew point and
+      # are excluded from selection.
+      rooms_with_dp: >
+        {% set ns = namespace(items=[]) %}
+        {% set a = 17.62 %}{% set b = 243.12 %}
+        {% for room in rooms %}
+          {% if room.rh is not none and room.t is not none and room.rh > 0 and room.rh <= 100 %}
+            {% set g = log(room.rh / 100) + (a * room.t) / (b + room.t) %}
+            {% set dp = (b * g / (a - g)) | round(2) %}
+            {% set ns.items = ns.items + [{'name': room.name, 'rh': room.rh, 't': room.t, 'dp': dp}] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+      worst: >
+        {{ (rooms_with_dp | sort(attribute='dp', reverse=true) | first)
+           if rooms_with_dp | length > 0 else none }}
+  # Fail-closed: if no room has usable numeric climate data, skip publishing
+  # rather than driving the bridge with synthetic fallback values. The fake
+  # sensor keeps its last value and the idm_bridge stale timeout eventually
+  # applies the configured safe fallback.
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ worst is not none }}"
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: number.idm_simulated_humidity
+            data:
+              value: "{{ worst.rh }}"
+          - action: number.set_value
+            target:
+              entity_id: number.idm_simulated_temperature
+            data:
+              value: "{{ worst.t }}"
+    default:
+      - action: persistent_notification.create
+        data:
+          title: IDM Fake Sensor
+          message: >
+            Kein Raum mit verwendbaren Klima-Sensorwerten; Veröffentlichung an
+            den Fake Sensor ausgesetzt (Fail-closed).
+          notification_id: idm_fake_sensor_no_data

@@ -31,6 +31,18 @@ int main() {
   assert(output.humidity_code(50.0f) == 2001);
   output.set_humidity_code_range(100, 3900);
 
+  // An inverted range (min >= max) must be rejected, leaving the previously
+  // configured range intact. Previously the setter stored both endpoints
+  // independently, producing a negative code span silently.
+  const auto previous_min = output.calibration().humidity_code_min;
+  const auto previous_max = output.calibration().humidity_code_max;
+  output.set_humidity_code_range(3900, 100);  // inverted
+  assert(output.calibration().humidity_code_min == previous_min);
+  assert(output.calibration().humidity_code_max == previous_max);
+  output.set_humidity_code_range(500, 500);  // equal
+  assert(output.calibration().humidity_code_min == previous_min);
+  assert(output.calibration().humidity_code_max == previous_max);
+
   constexpr size_t kty_count =
       sizeof(KTY81_210_PROTOTYPE_TABLE) /
       sizeof(KTY81_210_PROTOTYPE_TABLE[0]);
