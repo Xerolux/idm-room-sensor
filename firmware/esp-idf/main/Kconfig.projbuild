@@ -97,4 +97,24 @@ config IDM_OTA_TASK_STACK_SIZE
     range 6144 16384
     default 8192
 
+config IDM_OTA_ALLOWED_HOST
+    string "Allowed OTA download host"
+    default ""
+    help
+        When non-empty, OTA download URLs must use exactly this hostname.
+        Leave empty to accept any HTTPS host (less secure; only appropriate
+        for isolated commissioning networks). Pinning to a vendor CDN or a
+        controlled release host is strongly recommended for field devices.
+
+config IDM_OTA_HEALTH_SECONDS
+    int "OTA image health confirmation window in seconds"
+    range 10 600
+    default 30
+    help
+        A pending OTA image is only marked valid (cancel rollback) after the
+        device has stayed up for this many seconds with the main loop running
+        and the watchdog being reset. If the new image crash-loops before the
+        window elapses, the ESP-IDF rollback mechanism reverts to the previous
+        image on the next reset.
+
 endmenu

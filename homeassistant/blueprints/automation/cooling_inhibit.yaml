@@ -5,6 +5,11 @@ blueprint:
     the unsafe threshold and clear actions after it rises above a separate
     recovery threshold. Keep the recovery threshold higher to provide
     hysteresis.
+
+    Safety interlock: if the margin sensor becomes unavailable or unknown, the
+    automation treats the state as unsafe and runs the inhibit actions. Pair
+    this blueprint with the stale_guard blueprint so a stale-but-numeric margin
+    is also caught.
   domain: automation
   input:
     margin_sensor:
@@ -26,8 +31,8 @@ blueprint:
     clear_above:
       name: Clear above
       description: >
-        Margin in kelvin above which the inhibit may be cleared. Set this
-        higher than the inhibit threshold.
+        Margin in kelvin above which the inhibit may be cleared. Must be higher
+        than the inhibit threshold; the automation asserts this at run time.
       default: 4
       selector:
         number:
@@ -49,6 +54,10 @@ blueprint:
       selector:
         action:
 
+variables:
+  z_inhibit_below: !input inhibit_below
+  z_clear_above: !input clear_above
+
 triggers:
   - trigger: numeric_state
     id: inhibit
@@ -58,10 +67,29 @@ triggers:
     id: clear
     entity_id: !input margin_sensor
     above: !input clear_above
+  # Fail-safe interlock: an unavailable or unknown margin sensor is treated as
+  # unsafe and forces the inhibit path. Without this, a stuck sensor would
+  # leave the previous inhibit/clear state in place indefinitely.
+  - trigger: state
+    id: unavailable
+    entity_id: !input margin_sensor
+    to: unavailable
+  - trigger: state
+    id: unavailable
+    entity_id: !input margin_sensor
+    to: unknown
 
 actions:
+  # Guard: enforce hysteresis ordering at run time. If the recovery threshold
+  # is not above the inhibit threshold, stop immediately rather than letting
+  # both numeric_state triggers flap against each other.
+  - if:
+      - condition: template
+        value_template: "{{ z_clear_above <= z_inhibit_below }}"
+    then:
+      - stop: "Recovery threshold must be above the inhibit threshold"
   - choose:
-      - conditions: "{{ trigger.id == 'inhibit' }}"
+      - conditions: "{{ trigger.id == 'inhibit' or trigger.id == 'unavailable' }}"
         sequence: !input inhibit_actions
     default: !input clear_actions
 

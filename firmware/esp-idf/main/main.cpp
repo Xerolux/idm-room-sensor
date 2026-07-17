@@ -445,6 +445,60 @@ bool authorize_mutation(httpd_req_t *request) {
   return true;
 }
 
+// Outcome of a diagnostics authorization check.
+enum class DiagnosticsAuth {
+  kFull,         // token configured and request authorized: publish everything
+  kRedacted,     // token unset: publish operational fields, redact sensor data
+  kBlocked,      // token configured but request unauthorized: 401 already sent
+};
+
+// When IDM_API_TOKEN is configured, the diagnostics endpoint is gated by the
+// same bearer check as mutating endpoints. When the token is empty, the
+// endpoint still answers (operational diagnostics) but sensor values and the
+// command provenance are redacted so a network observer cannot read live
+// climate state or learn whether the mutating API is protected.
+DiagnosticsAuth authorize_diagnostics(httpd_req_t *request) {
+  const std::string token = CONFIG_IDM_API_TOKEN;
+  if (token.empty())
+    return DiagnosticsAuth::kRedacted;
+  char header[384]{};
+  if (httpd_req_get_hdr_value_str(
+          request, "Authorization", header, sizeof(header)) != ESP_OK) {
+    httpd_resp_set_hdr(request, "WWW-Authenticate", "Bearer");
+    send_error(request, "401 Unauthorized", "missing bearer token");
+    return DiagnosticsAuth::kBlocked;
+  }
+  const std::string expected = "Bearer " + token;
+  if (!constant_time_equal(header, expected)) {
+    httpd_resp_set_hdr(request, "WWW-Authenticate", "Bearer");
+    send_error(request, "401 Unauthorized", "invalid bearer token");
+    return DiagnosticsAuth::kBlocked;
+  }
+  return DiagnosticsAuth::kFull;
+}
+
+// Replace sensor and command-provenance fields with non-sensitive surrogates.
+// Called when the diagnostics request is unauthenticated and IDM_API_TOKEN is
+// unset. Operational fields (bridge_state, safe_active/stale/fault, uptime,
+// free_heap, output_attempts/failures, network_connected, mutating_api_enabled)
+// remain visible for commissioning diagnostics.
+void redact_diagnostics(cJSON *root) {
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "effective_humidity", cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "effective_temperature", cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "dew_point_c", cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "command_source", cJSON_CreateString("redacted"));
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "humidity_dac_code", cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "temperature_digipot_code", cJSON_CreateNull());
+  cJSON_ReplaceItemInObjectCaseSensitive(
+      root, "temperature_resistance_ohm", cJSON_CreateNull());
+}
+
 bool require_confirmation(
     httpd_req_t *request, const char *expected_value) {
   char header[96]{};
@@ -491,6 +545,10 @@ bool json_integer_in_range(
 }
 
 esp_err_t diagnostics_get_handler(httpd_req_t *request) {
+  const DiagnosticsAuth auth = authorize_diagnostics(request);
+  if (auth == DiagnosticsAuth::kBlocked)
+    return ESP_OK;
+
   NativeDiagnostics diagnostics{};
   char output_error[sizeof(s_output_error)]{};
   char ota_status[sizeof(s_ota_status)]{};
@@ -573,6 +631,10 @@ esp_err_t diagnostics_get_handler(httpd_req_t *request) {
       root, "uptime_s",
       static_cast<double>(esp_timer_get_time()) / 1000000.0);
   cJSON_AddNumberToObject(root, "free_heap_bytes", esp_get_free_heap_size());
+  if (auth == DiagnosticsAuth::kRedacted) {
+    redact_diagnostics(root);
+    cJSON_AddBoolToObject(root, "redacted", true);
+  }
   return send_json(request, root);
 }
 
@@ -788,6 +850,25 @@ esp_err_t ota_post_handler(httpd_req_t *request) {
         "OTA URL must be an HTTPS URL shorter than 512 characters");
   }
 
+  // Optional host allowlist. When IDM_OTA_ALLOWED_HOST is configured, the URL
+  // host (between "https://" and the next '/', ':', or end of string) must
+  // match exactly. Empty config preserves the legacy any-HTTPS behaviour for
+  // isolated commissioning networks, but pinning is strongly recommended.
+  const std::string allowed_host = CONFIG_IDM_OTA_ALLOWED_HOST;
+  if (!allowed_host.empty()) {
+    const char *host_start = url->valuestring + 8;  // past "https://"
+    const char *host_end = host_start;
+    while (*host_end != '\0' && *host_end != '/' && *host_end != ':')
+      ++host_end;
+    const std::string url_host(host_start, host_end - host_start);
+    if (url_host != allowed_host) {
+      cJSON_Delete(root);
+      return send_error(
+          request, "422 Unprocessable Entity",
+          "OTA URL host is not on the configured allowlist");
+    }
+  }
+
   bool expected = false;
   if (!s_ota_running.compare_exchange_strong(expected, true)) {
     cJSON_Delete(root);
@@ -993,20 +1074,48 @@ void initialize_watchdog() {
   }
 }
 
-void confirm_pending_ota_image() {
+bool s_ota_confirmed = false;
+uint32_t s_boot_ms = 0;
+
+// Health-gated OTA confirmation. The previous implementation marked a pending
+// image valid on every boot unconditionally, which defeated the ESP-IDF
+// anti-rollback mechanism: a broken image was accepted before any safety check
+// could run. Now confirmation requires BOTH:
+//   1. The main loop is alive and the watchdog was reset for at least
+//      CONFIG_IDM_OTA_HEALTH_SECONDS since boot, AND
+//   2. Either the I2C analog output initialized successfully, or the I2C
+//      retry window has elapsed (so a persistently broken bus does not pin
+//      the device in PENDING forever — the bridge still runs fail-safe).
+// If the new image crash-loops before the window elapses, the watchdog panic
+// triggers a reset and ESP-IDF rolls back to the previous image automatically.
+void try_confirm_ota_image(uint32_t current_ms) {
+  if (s_ota_confirmed)
+    return;
   const esp_partition_t *running = esp_ota_get_running_partition();
   if (running == nullptr)
     return;
   esp_ota_img_states_t state;
-  if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
-      state == ESP_OTA_IMG_PENDING_VERIFY) {
-    const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
-    if (result == ESP_OK) {
-      ESP_LOGI(TAG, "Pending OTA image marked valid");
-    } else {
-      ESP_LOGE(TAG, "Could not validate OTA image: %s",
-               esp_err_to_name(result));
-    }
+  if (esp_ota_get_state_partition(running, &state) != ESP_OK ||
+      state != ESP_OTA_IMG_PENDING_VERIFY)
+    return;
+
+  const uint32_t health_window_ms =
+      static_cast<uint32_t>(CONFIG_IDM_OTA_HEALTH_SECONDS) * 1000U;
+  const bool health_window_elapsed =
+      static_cast<uint32_t>(current_ms - s_boot_ms) >= health_window_ms;
+  const bool i2c_ready_or_retried =
+      s_output_hardware.ready ||
+      static_cast<int32_t>(current_ms - s_next_i2c_attempt_ms) >= 0;
+  if (!health_window_elapsed || !i2c_ready_or_retried)
+    return;
+
+  const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
+  s_ota_confirmed = true;
+  if (result == ESP_OK) {
+    ESP_LOGI(TAG, "Pending OTA image marked valid after health window");
+  } else {
+    ESP_LOGE(TAG, "Could not validate OTA image: %s",
+             esp_err_to_name(result));
   }
 }
 
@@ -1074,11 +1183,14 @@ extern "C" void app_main(void) {
   // missing or failed device latches the runtime into output-fault fallback
   // and is retried without blocking diagnostics or the watchdog.
   const uint32_t startup_ms = now_ms();
+  s_boot_ms = startup_ms;
   apply_outputs_once(startup_ms);
   s_next_output_attempt_ms = startup_ms + OUTPUT_RETRY_MS;
   s_next_i2c_attempt_ms = startup_ms + I2C_RETRY_MS;
 
-  confirm_pending_ota_image();
+  // A pending OTA image is no longer confirmed blindly at boot. The health
+  // window is evaluated inside the main loop (try_confirm_ota_image), so a
+  // crash-looping new image rolls back instead of being accepted.
   initialize_wifi();
 
   uint32_t next_diagnostic_log_ms = now_ms();
@@ -1109,6 +1221,7 @@ extern "C" void app_main(void) {
               1000U;
     }
 
+    try_confirm_ota_image(current_ms);
     esp_task_wdt_reset();
     vTaskDelay(pdMS_TO_TICKS(100));
   }

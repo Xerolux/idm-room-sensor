@@ -39,8 +39,13 @@ def test_native_diagnostic_fields_match_schema() -> None:
         )
     )
 
-    assert set(schema["required"]) == set(schema["properties"])
-    assert payload_fields == set(schema["required"])
+    assert set(schema["required"]) <= set(schema["properties"])
+    optional = set(schema.get("optional", []))
+    declared = set(schema["properties"])
+    assert optional <= declared
+    # The handler always emits every required field; it additionally emits the
+    # optional redacted flag only on the unauthenticated/redacted path.
+    assert payload_fields == set(schema["required"]) | optional
     assert schema["additionalProperties"] is False
 
 
@@ -145,6 +150,59 @@ def test_mutating_routes_require_auth_and_dangerous_confirmation() -> None:
     ):
         body = source[source.index(f"esp_err_t {handler}"):]
         assert "authorize_mutation(request)" in body[:700]
+
+
+def test_diagnostics_endpoint_gated_or_redacted() -> None:
+    # When IDM_API_TOKEN is set, the diagnostics endpoint runs the same bearer
+    # gate as mutating endpoints. When it is empty, the endpoint still answers
+    # but redacts sensor and command-provenance fields so a network observer
+    # cannot read live climate state. Both branches must be present.
+    source = read_native_source()
+    handler = source[
+        source.index("esp_err_t diagnostics_get_handler"):
+        source.index("esp_err_t climate_post_handler")
+    ]
+    assert "authorize_diagnostics(request)" in handler
+    assert "DiagnosticsAuth::kBlocked" in handler
+    assert "DiagnosticsAuth::kRedacted" in handler
+    assert "redact_diagnostics(root)" in handler
+
+    redact_fn = source[
+        source.index("void redact_diagnostics"):
+        source.index("esp_err_t diagnostics_get_handler")
+    ]
+    for redacted_field in (
+        "effective_humidity",
+        "effective_temperature",
+        "dew_point_c",
+        "command_source",
+        "humidity_dac_code",
+        "temperature_digipot_code",
+        "temperature_resistance_ohm",
+    ):
+        assert redacted_field in redact_fn
+
+
+def test_ota_is_health_gated_and_host_allowlisted() -> None:
+    # A pending OTA image must not be marked valid unconditionally on boot; it
+    # must wait for the health window (try_confirm_ota_image) and respect the
+    # optional host allowlist. The legacy confirm_pending_ota_image() helper
+    # that marked valid on every boot must be gone.
+    source = read_native_source()
+
+    assert "void try_confirm_ota_image" in source
+    assert "s_ota_confirmed" in source
+    assert "s_boot_ms" in source
+    assert "CONFIG_IDM_OTA_HEALTH_SECONDS" in source
+    assert "try_confirm_ota_image(current_ms)" in source
+    assert "confirm_pending_ota_image()" not in source
+
+    ota_handler = source[
+        source.index("esp_err_t ota_post_handler"):
+        source.index("esp_err_t start_http_server")
+    ]
+    assert "CONFIG_IDM_OTA_ALLOWED_HOST" in ota_handler
+    assert "OTA URL host is not on the configured allowlist" in ota_handler
 
 
 def test_partition_table_has_two_equal_ota_slots() -> None:

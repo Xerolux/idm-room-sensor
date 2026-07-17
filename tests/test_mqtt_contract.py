@@ -111,6 +111,72 @@ def test_supported_entry_points_compile_mqtt_but_disable_it_by_default() -> None
         assert "mqtt_diagnostics:" in config
 
 
+def test_mqtt_transport_requires_credentials() -> None:
+    # The shared MQTT component must carry username/password wiring so the
+    # command path to the heat pump is never open. The actual fail-closed gate
+    # for placeholder values lives in tools/check_esphome.py.
+    config = yaml.safe_load(MQTT_PACKAGE.read_text(encoding="utf-8"))["mqtt"]
+    assert config["username"] == "${mqtt_username}"
+    assert config["password"] == "${mqtt_password}"
+    # discover_ip (not the misspelled discover_ip) is the documented ESPHome
+    # option; the typo was silently ignored before this contract existed.
+    assert "discover_ip" not in config
+    assert config["discovery_ip"] is True
+
+
+def test_device_entry_points_ship_credential_placeholders() -> None:
+    # Production entry points must ship the sentinel placeholder values so the
+    # repository credential check refuses to validate them until a real secret
+    # is configured. The compile fixture package-test.yaml deliberately uses
+    # non-sentinel test values and is excluded here.
+    device_entry_points = (
+        ROOT / "firmware/esp-sensor-esphome.yaml",
+        ROOT / "firmware/fake-sensor-bridge.yaml",
+        ROOT / "firmware/fake-sensor-esphome.yaml",
+    )
+    for entry_point in device_entry_points:
+        config = entry_point.read_text(encoding="utf-8")
+        assert "mqtt_username: idm-mqtt-CHANGE-ME" in config
+        assert "mqtt_password: idm-mqtt-CHANGE-ME" in config
+        # The bridge/fake-sensor devices expose the local web UI; the pure
+        # room sensor (esp-sensor-esphome.yaml) does not, so it has no
+        # web_password substitution to gate.
+        if entry_point.name != "esp-sensor-esphome.yaml":
+            assert "web_password: CHANGE-ME-BEFORE-INSTALLATION" in config
+
+
+def test_credential_placeholder_gate_rejects_sentinels() -> None:
+    # tools/check_esphome.py must refuse any configuration that still contains
+    # a shipped credential placeholder. This is the fail-closed gate. The check
+    # reads ROOT/configuration, so we write a temporary fixture inside the repo
+    # tree and remove it afterwards.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_esphome", ROOT / "tools/check_esphome.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    fixture_rel = "tests/.fixture-credential-gate.yaml"
+    fixture_abs = ROOT / fixture_rel
+    try:
+        for placeholder in module.CREDENTIAL_PLACEHOLDERS:
+            fixture_abs.write_text(
+                f"web_password: {placeholder}\n", encoding="utf-8"
+            )
+            try:
+                module.check_credential_placeholders(fixture_rel)
+            except SystemExit:
+                continue
+            raise AssertionError(
+                f"placeholder {placeholder} was not rejected by the gate"
+            )
+    finally:
+        if fixture_abs.exists():
+            fixture_abs.unlink()
+
+
 def test_bridge_command_topics_are_deterministic_and_not_retained() -> None:
     expected_topics = (
         "${mqtt_topic_prefix}/command/climate/set",

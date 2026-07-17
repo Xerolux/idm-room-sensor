@@ -6,7 +6,9 @@ substitutions:
   timeout_seconds: "120"
   mqtt_enabled: "false"
   mqtt_broker: 192.0.2.1
-  mqtt_port: "1883"
+  mqtt_port: "8883"
+  mqtt_username: idm-mqtt-CHANGE-ME
+  mqtt_password: idm-mqtt-CHANGE-ME
   mqtt_topic_prefix: idm/idm-fake-sensor
   web_port: "80"
   web_username: idm-admin

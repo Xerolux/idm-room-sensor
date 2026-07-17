@@ -22,7 +22,9 @@ cores with the ESPHome variant.
   local-only;
 - exposes versioned diagnostics and authenticated mutation endpoints;
 - uses the ESP task watchdog, brownout detection and OTA rollback support;
-- accepts only HTTPS OTA URLs using the ESP certificate bundle.
+- accepts only HTTPS OTA URLs using the ESP certificate bundle;
+- confirms a new OTA image only after a health window, never blindly at boot;
+- redacts sensor data on the diagnostics endpoint when no API token is set.
 
 ## Build
 
@@ -60,8 +62,12 @@ At minimum, review:
 - factory analog calibration.
 
 An empty Wi-Fi SSID keeps the target local-only. An empty API token disables
-every mutating endpoint. The diagnostic endpoint remains read-only and does
-not require authentication.
+every mutating endpoint. The diagnostic endpoint remains readable without a
+token, but when no token is configured it **redacts** sensor values
+(effective humidity/temperature, dew point, command source, output codes) and
+publishes only operational fields (bridge state, safe/stale/fault flags,
+uptime, heap). Configure `IDM_API_TOKEN` to receive full diagnostics behind
+the same bearer gate as the mutating endpoints.
 
 The HTTP API itself is not TLS-protected. Operate it only on a trusted,
 isolated commissioning network; the bearer token must not be exposed across
@@ -123,7 +129,12 @@ curl -X POST http://DEVICE/api/v1/ota \
   -d '{"url":"https://example.invalid/idm-native.bin"}'
 ```
 
-The device validates a pending OTA image on successful startup. Interrupted or
-unbootable OTA images are handled by the configured dual-OTA partition table
-and bootloader rollback support. Recovery behavior still requires a physical
+By default any HTTPS host is accepted (relying on the ESP certificate bundle).
+For field deployments, set `IDM_OTA_ALLOWED_HOST` to the exact download
+hostname so a compromised token cannot redirect the device at an arbitrary
+host. A pending image is only marked valid after `IDM_OTA_HEALTH_SECONDS`
+(default 30 s) of healthy main-loop operation; a crash-looping image rolls
+back to the previous slot automatically. Interrupted or unbootable OTA images
+are otherwise handled by the configured dual-OTA partition table and
+bootloader rollback support. Recovery behavior still requires a physical
 fault-injection test before real installation.
